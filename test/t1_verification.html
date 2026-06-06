@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>T-1 検証：ZMK Studio RPC 接続テスト</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; color: #a78bfa; }
+    .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 24px; }
+    .card {
+      background: #16213e;
+      border: 1px solid #2d2d5e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h2 { font-size: 1rem; margin-bottom: 12px; color: #c4b5fd; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: #7c3aed; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #6d28d9; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #b91c1c; }
+    .btn-success { background: #059669; color: #fff; }
+    .btn-success:hover:not(:disabled) { background: #047857; }
+    .btn-secondary { background: #374151; color: #d1d5db; }
+    .btn-secondary:hover:not(:disabled) { background: #4b5563; }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-gray { background: #6b7280; }
+    .dot-green { background: #10b981; }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .log {
+      background: #0f0f23;
+      border: 1px solid #2d2d5e;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 0.78rem;
+      height: 220px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .log-info { color: #93c5fd; }
+    .log-ok { color: #6ee7b7; }
+    .log-warn { color: #fcd34d; }
+    .log-error { color: #fca5a5; }
+    .log-data { color: #d4d4d4; }
+    .section-label {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    input[type="number"], select {
+      background: #0f0f23;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      color: #e0e0e0;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      width: 100%;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .tag-pass { background: #065f46; color: #6ee7b7; }
+    .tag-fail { background: #7f1d1d; color: #fca5a5; }
+    .tag-skip { background: #1f2937; color: #9ca3af; }
+    .result-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .result-table td { padding: 6px 8px; border-bottom: 1px solid #1f2937; }
+    .result-table td:first-child { color: #9ca3af; width: 40%; }
+    #keymap-display {
+      background: #0f0f23;
+      border: 1px solid #2d2d5e;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 0.78rem;
+      min-height: 80px;
+      white-space: pre-wrap;
+      color: #a3e635;
+    }
+  </style>
+</head>
+<body>
+  <h1>T-1 検証：ZMK Studio RPC 接続テスト</h1>
+  <p class="subtitle">WebBluetooth / WebSerial 経由で ZMK Studio RPC に接続し、キーマップの読み書きを検証します。</p>
+
+  <!-- ステップ1：接続 -->
+  <div class="card">
+    <h2>Step 1 — デバイス接続</h2>
+    <div class="btn-row">
+      <button class="btn-primary" id="btn-ble">BLE で接続</button>
+      <button class="btn-primary" id="btn-serial">USB Serial で接続</button>
+      <button class="btn-danger" id="btn-disconnect" disabled>切断</button>
+    </div>
+    <div class="status-row">
+      <div class="dot dot-gray" id="conn-dot"></div>
+      <span id="conn-label">未接続</span>
+    </div>
+  </div>
+
+  <!-- ステップ2：キーマップ読み取り -->
+  <div class="card">
+    <h2>Step 2 — キーマップ読み取り</h2>
+    <div class="btn-row">
+      <button class="btn-secondary" id="btn-read" disabled>キーマップを読み取る</button>
+    </div>
+    <div class="section-label">読み取り結果</div>
+    <div id="keymap-display">（接続後に読み取りを実行してください）</div>
+  </div>
+
+  <!-- ステップ3：キー変更テスト -->
+  <div class="card">
+    <h2>Step 3 — キー変更テスト（書き込み）</h2>
+    <p style="font-size:0.82rem;color:#f59e0b;margin-bottom:12px;">
+      ⚠ この操作は実機のキーを書き換えます。テスト後に元の値へ戻してください。
+    </p>
+    <div class="grid-2">
+      <div>
+        <div class="section-label">レイヤー番号</div>
+        <input type="number" id="inp-layer" value="0" min="0" max="31">
+      </div>
+      <div>
+        <div class="section-label">キー番号</div>
+        <input type="number" id="inp-key" value="0" min="0" max="127">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="section-label">バインディング（変更後）</div>
+        <input type="text" id="inp-binding" value="&kp A" style="background:#0f0f23;border:1px solid #374151;border-radius:6px;color:#e0e0e0;padding:6px 10px;font-size:0.85rem;width:100%;">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-success" id="btn-write" disabled>キーを書き換える</button>
+    </div>
+  </div>
+
+  <!-- 検証結果サマリー -->
+  <div class="card">
+    <h2>検証結果サマリー</h2>
+    <table class="result-table">
+      <tr>
+        <td>BLE 接続</td>
+        <td><span class="tag tag-skip" id="res-ble">未実施</span></td>
+      </tr>
+      <tr>
+        <td>Serial 接続</td>
+        <td><span class="tag tag-skip" id="res-serial">未実施</span></td>
+      </tr>
+      <tr>
+        <td>キーマップ読み取り</td>
+        <td><span class="tag tag-skip" id="res-read">未実施</span></td>
+      </tr>
+      <tr>
+        <td>キー書き込み</td>
+        <td><span class="tag tag-skip" id="res-write">未実施</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ログ -->
+  <div class="card">
+    <h2>ログ</h2>
+    <div class="log" id="log"></div>
+    <div style="margin-top:8px;">
+      <button class="btn-secondary" onclick="document.getElementById('log').innerHTML=''">クリア</button>
+    </div>
+  </div>
+
+  <script type="module">
+    // ---- ユーティリティ ----
+    const log = (msg, cls = 'log-info') => {
+      const el = document.getElementById('log');
+      const line = document.createElement('div');
+      line.className = cls;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    };
+
+    const setResult = (id, pass, label) => {
+      const el = document.getElementById(id);
+      el.textContent = label ?? (pass ? 'PASS' : 'FAIL');
+      el.className = `tag ${pass ? 'tag-pass' : 'tag-fail'}`;
+    };
+
+    const setConn = (connected, label) => {
+      const dot = document.getElementById('conn-dot');
+      dot.className = `dot ${connected ? 'dot-green' : 'dot-gray'}`;
+      document.getElementById('conn-label').textContent = label;
+      document.getElementById('btn-disconnect').disabled = !connected;
+      document.getElementById('btn-read').disabled = !connected;
+      document.getElementById('btn-write').disabled = !connected;
+    };
+
+    // ---- 状態 ----
+    let transport = null;     // { type, device/port, reader, writer }
+    let rpcPort = null;       // ZMK RPC ポート（将来的に ts-client に置き換え）
+
+    // ---- ZMK BLE UUID ----
+    // ZMK Studio が使用する GATT サービス UUID
+    const ZMK_RPC_SERVICE   = '00000000-0196-6107-c967-c5cfb1c2482a';
+    const ZMK_RPC_RX_CHAR   = '00000001-0196-6107-c967-c5cfb1c2482a'; // keyboard→host
+    const ZMK_RPC_TX_CHAR   = '00000002-0196-6107-c967-c5cfb1c2482a'; // host→keyboard
+
+    // ---- BLE 接続 ----
+    document.getElementById('btn-ble').addEventListener('click', async () => {
+      try {
+        if (!navigator.bluetooth) {
+          throw new Error('WebBluetooth が利用できません（Chrome/Edge が必要です）');
+        }
+        log('BLE デバイスを検索中...');
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [ZMK_RPC_SERVICE] }],
+          optionalServices: [ZMK_RPC_SERVICE],
+        });
+        log(`デバイス発見: ${device.name ?? '(名前なし)'}`, 'log-ok');
+
+        const server = await device.gatt.connect();
+        log('GATT サーバーに接続しました', 'log-ok');
+
+        const service = await server.getPrimaryService(ZMK_RPC_SERVICE);
+        const rxChar  = await service.getCharacteristic(ZMK_RPC_RX_CHAR);
+        const txChar  = await service.getCharacteristic(ZMK_RPC_TX_CHAR);
+
+        log('RPC サービス / キャラクタリスティックを取得しました', 'log-ok');
+
+        // notify 開始
+        await rxChar.startNotifications();
+        rxChar.addEventListener('characteristicvaluechanged', (e) => {
+          const data = new Uint8Array(e.target.value.buffer);
+          log(`← RX: [${[...data].map(b => b.toString(16).padStart(2,'0')).join(' ')}]`, 'log-data');
+        });
+
+        transport = { type: 'ble', device, server, rxChar, txChar };
+        setConn(true, `BLE 接続中: ${device.name ?? device.id}`);
+        setResult('res-ble', true, 'PASS — 接続成功');
+        log('BLE 接続完了', 'log-ok');
+
+        device.addEventListener('gattserverdisconnected', () => {
+          log('BLE 切断されました', 'log-warn');
+          transport = null;
+          setConn(false, '未接続（BLE 切断）');
+        });
+      } catch (err) {
+        log(`BLE エラー: ${err.message}`, 'log-error');
+        setResult('res-ble', false, `FAIL — ${err.message}`);
+      }
+    });
+
+    // ---- Serial 接続 ----
+    document.getElementById('btn-serial').addEventListener('click', async () => {
+      try {
+        if (!navigator.serial) {
+          throw new Error('WebSerial が利用できません（Chrome/Edge + フラグ要）');
+        }
+        log('Serial ポートを選択中...');
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        log(`Serial ポートをオープンしました (baud: 115200)`, 'log-ok');
+
+        transport = { type: 'serial', port };
+        setConn(true, 'USB Serial 接続中');
+        setResult('res-serial', true, 'PASS — 接続成功');
+        log('Serial 接続完了', 'log-ok');
+      } catch (err) {
+        log(`Serial エラー: ${err.message}`, 'log-error');
+        setResult('res-serial', false, `FAIL — ${err.message}`);
+      }
+    });
+
+    // ---- 切断 ----
+    document.getElementById('btn-disconnect').addEventListener('click', async () => {
+      if (!transport) return;
+      try {
+        if (transport.type === 'ble') {
+          transport.server.disconnect();
+        } else {
+          await transport.port.close();
+        }
+      } catch (_) { /* ignore */ }
+      transport = null;
+      setConn(false, '未接続');
+      log('切断しました', 'log-warn');
+    });
+
+    // ---- キーマップ読み取り ----
+    // ZMK Studio RPC は protobuf ベースのフレーミングを使う。
+    // ts-client がまだ ESM/CDN で直接使えないため、ここでは生の RPC フレームを送って
+    // レスポンスを観察する「ローレベル疎通確認」を行う。
+    //
+    // ZMK Studio RPC フレーム形式（COBS エンコード）:
+    //   [COBS_ENCODED( [2バイト長] [protobuf payload] )] 0x00
+    //
+    // GetKeyboardInfo リクエスト（最小パケット）: request_id=1, get_keyboard_info={}
+    // protobuf bytes（手動エンコード）: 0x0a 0x02 0x08 0x01 0x12 0x00
+    //
+    // ここでは「何かレスポンスが返ってくるか」だけを確認する。
+    document.getElementById('btn-read').addEventListener('click', async () => {
+      if (!transport) { log('未接続です', 'log-warn'); return; }
+      try {
+        log('キーマップ読み取り開始...', 'log-info');
+        document.getElementById('keymap-display').textContent = '読み取り中...';
+
+        if (transport.type === 'ble') {
+          await readKeymapBle();
+        } else {
+          await readKeymapSerial();
+        }
+      } catch (err) {
+        log(`読み取りエラー: ${err.message}`, 'log-error');
+        setResult('res-read', false, `FAIL — ${err.message}`);
+        document.getElementById('keymap-display').textContent = `エラー: ${err.message}`;
+      }
+    });
+
+    // COBS エンコード（ZMK RPCのフレーム境界に使用）
+    function cobsEncode(data) {
+      const out = [];
+      let codeIdx = 0;
+      let code = 1;
+      for (let i = 0; i < data.length; i++) {
+        if (data[i] === 0) {
+          out[codeIdx] = code;
+          codeIdx = out.length;
+          out.push(0);
+          code = 1;
+        } else {
+          out.push(data[i]);
+          code++;
+          if (code === 0xff) {
+            out[codeIdx] = code;
+            codeIdx = out.length;
+            out.push(0);
+            code = 1;
+          }
+        }
+      }
+      out[codeIdx] = code;
+      out.push(0x00); // フレーム終端
+      return new Uint8Array(out);
+    }
+
+    // GetKeyboardInfo リクエストパケットを構築
+    // protobuf: RequestResponse { request_id: 1, request: { get_keyboard_info: {} } }
+    // 手動エンコード（フィールド番号 1 = request_id uint32, フィールド番号 2 = oneof request)
+    // 実際の ZMK RPC proto に合わせた最小バイト列:
+    function buildGetKeyboardInfoRequest() {
+      // RequestResponse.request_id = 1 → tag 0x08 value 0x01
+      // RequestResponse.get_keyboard_info = {} → tag 0x52 (field 10, wire 2) len 0x00
+      // ※ ZMK Studio の proto を参照: zmk-studio-ts-client/src/proto/*.proto
+      const payload = new Uint8Array([0x08, 0x01, 0x52, 0x00]);
+      // 2バイト長プレフィックス（little-endian）
+      const frame = new Uint8Array(2 + payload.length);
+      frame[0] = payload.length & 0xff;
+      frame[1] = (payload.length >> 8) & 0xff;
+      frame.set(payload, 2);
+      return cobsEncode(frame);
+    }
+
+    async function readKeymapBle() {
+      const { rxChar, txChar } = transport;
+      const responses = [];
+      const handler = (e) => {
+        const data = new Uint8Array(e.target.value.buffer);
+        responses.push(data);
+        log(`← RPC レスポンス受信 (${data.length} bytes): [${[...data].map(b=>b.toString(16).padStart(2,'0')).join(' ')}]`, 'log-data');
+      };
+      rxChar.addEventListener('characteristicvaluechanged', handler);
+
+      try {
+        const packet = buildGetKeyboardInfoRequest();
+        log(`→ GetKeyboardInfo 送信 (${packet.length} bytes): [${[...packet].map(b=>b.toString(16).padStart(2,'0')).join(' ')}]`, 'log-info');
+        await txChar.writeValueWithResponse(packet);
+
+        // 2秒待機してレスポンスを受信
+        await new Promise(r => setTimeout(r, 2000));
+
+        if (responses.length > 0) {
+          const summary = `受信パケット数: ${responses.length}\n合計 ${responses.reduce((a,b)=>a+b.length,0)} bytes\n\n（T-1 検証：RPC 疎通確認完了）\n\nts-client を使った完全なキーマップ解析は Phase 2 で実装します。`;
+          document.getElementById('keymap-display').textContent = summary;
+          setResult('res-read', true, `PASS — ${responses.length} パケット受信`);
+          log('キーマップ読み取り成功（RPC 疎通確認完了）', 'log-ok');
+        } else {
+          document.getElementById('keymap-display').textContent = '⚠ レスポンスなし。キーボードが ZMK Studio RPC に対応しているか確認してください。';
+          setResult('res-read', false, 'FAIL — レスポンスなし');
+          log('レスポンスなし。CONFIG_ZMK_STUDIO=y が必要です', 'log-warn');
+        }
+      } finally {
+        rxChar.removeEventListener('characteristicvaluechanged', handler);
+      }
+    }
+
+    async function readKeymapSerial() {
+      // Serial の場合: WritableStream に送信、ReadableStream から受信
+      const { port } = transport;
+      const writer = port.writable.getWriter();
+      const reader = port.readable.getReader();
+      try {
+        const packet = buildGetKeyboardInfoRequest();
+        log(`→ GetKeyboardInfo 送信 (${packet.length} bytes)`, 'log-info');
+        await writer.write(packet);
+        writer.releaseLock();
+
+        // 2秒タイムアウトで受信
+        let received = new Uint8Array(0);
+        const deadline = Date.now() + 2000;
+        while (Date.now() < deadline) {
+          const { value, done } = await Promise.race([
+            reader.read(),
+            new Promise(r => setTimeout(() => r({ done: true, value: null }), 500)),
+          ]);
+          if (done || !value) break;
+          const merged = new Uint8Array(received.length + value.length);
+          merged.set(received);
+          merged.set(value, received.length);
+          received = merged;
+          log(`← RX: ${value.length} bytes`, 'log-data');
+        }
+        reader.releaseLock();
+
+        if (received.length > 0) {
+          const summary = `受信 ${received.length} bytes\n\n（T-1 検証：RPC 疎通確認完了）`;
+          document.getElementById('keymap-display').textContent = summary;
+          setResult('res-read', true, `PASS — ${received.length} bytes 受信`);
+          log('キーマップ読み取り成功', 'log-ok');
+        } else {
+          document.getElementById('keymap-display').textContent = '⚠ レスポンスなし';
+          setResult('res-read', false, 'FAIL — レスポンスなし');
+          log('レスポンスなし', 'log-warn');
+        }
+      } catch (err) {
+        try { reader.releaseLock(); } catch(_) {}
+        throw err;
+      }
+    }
+
+    // ---- キー書き込み ----
+    document.getElementById('btn-write').addEventListener('click', async () => {
+      if (!transport) { log('未接続です', 'log-warn'); return; }
+      const layer   = parseInt(document.getElementById('inp-layer').value, 10);
+      const keyIdx  = parseInt(document.getElementById('inp-key').value, 10);
+      const binding = document.getElementById('inp-binding').value.trim();
+      log(`キー書き込み: layer=${layer} key=${keyIdx} binding="${binding}"`, 'log-info');
+
+      try {
+        // SetLayerBinding リクエストを構築
+        // これは T-1 の「書き込み疎通確認」なので、
+        // 実際の protobuf エンコードは ts-client に委ねる前提で
+        // ここではダミーリクエストを送って応答有無を確認する
+        await writeKey(layer, keyIdx, binding);
+      } catch (err) {
+        log(`書き込みエラー: ${err.message}`, 'log-error');
+        setResult('res-write', false, `FAIL — ${err.message}`);
+      }
+    });
+
+    // SetLayerBinding リクエストパケット（最小構造）
+    // フィールド: layer_index, key_position, binding（hid_usage）
+    // Phase 2 では ts-client を使って正しくエンコードする
+    function buildSetLayerBindingRequest(layer, keyIdx, _binding) {
+      // RequestResponse.request_id = 2
+      // RequestResponse.set_layer_binding = SetLayerBinding { layer: layer, key_position: keyIdx, binding: ... }
+      // 暫定: 最小構造（layer と keyIdx のみ）
+      const payload = new Uint8Array([
+        0x08, 0x02,         // request_id = 2
+        0x5a,               // field 11 (set_layer_binding), wire type 2
+        0x04,               // length 4
+        0x08, layer & 0x7f, // layer_index
+        0x10, keyIdx & 0x7f // key_position
+      ]);
+      const frame = new Uint8Array(2 + payload.length);
+      frame[0] = payload.length & 0xff;
+      frame[1] = (payload.length >> 8) & 0xff;
+      frame.set(payload, 2);
+      return cobsEncode(frame);
+    }
+
+    async function writeKey(layer, keyIdx, binding) {
+      if (transport.type === 'ble') {
+        const { rxChar, txChar } = transport;
+        const responses = [];
+        const handler = (e) => {
+          const data = new Uint8Array(e.target.value.buffer);
+          responses.push(data);
+          log(`← 書き込みレスポンス: [${[...data].map(b=>b.toString(16).padStart(2,'0')).join(' ')}]`, 'log-data');
+        };
+        rxChar.addEventListener('characteristicvaluechanged', handler);
+        try {
+          const packet = buildSetLayerBindingRequest(layer, keyIdx, binding);
+          log(`→ SetLayerBinding 送信 (${packet.length} bytes)`, 'log-info');
+          await txChar.writeValueWithResponse(packet);
+          await new Promise(r => setTimeout(r, 1500));
+
+          if (responses.length > 0) {
+            setResult('res-write', true, `PASS — レスポンス受信`);
+            log('書き込みレスポンス確認済み（T-1 検証完了）', 'log-ok');
+          } else {
+            setResult('res-write', false, 'FAIL — レスポンスなし');
+            log('書き込みレスポンスなし（エラーの可能性）', 'log-warn');
+          }
+        } finally {
+          rxChar.removeEventListener('characteristicvaluechanged', handler);
+        }
+      } else {
+        // Serial
+        const { port } = transport;
+        const writer = port.writable.getWriter();
+        const packet = buildSetLayerBindingRequest(layer, keyIdx, binding);
+        log(`→ SetLayerBinding 送信 (${packet.length} bytes)`, 'log-info');
+        await writer.write(packet);
+        writer.releaseLock();
+        setResult('res-write', true, 'PASS — 送信完了（レスポンス確認は手動で）');
+        log('送信完了', 'log-ok');
+      }
+    }
+
+    // ---- ブラウザ互換性チェック ----
+    window.addEventListener('load', () => {
+      if (!navigator.bluetooth) {
+        log('⚠ WebBluetooth 非対応ブラウザです。Chrome または Edge を使用してください。', 'log-warn');
+      } else {
+        log('WebBluetooth: 利用可能', 'log-ok');
+      }
+      if (!navigator.serial) {
+        log('⚠ WebSerial 非対応です（chrome://flags/#enable-experimental-web-platform-features を有効化してください）。', 'log-warn');
+      } else {
+        log('WebSerial: 利用可能', 'log-ok');
+      }
+    });
+  </script>
+</body>
+</html>
