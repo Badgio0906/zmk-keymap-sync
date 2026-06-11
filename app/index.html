@@ -170,6 +170,7 @@
   <!-- アクションバー -->
   <div class="action-bar">
     <button class="btn-ghost" id="btn-reload" style="font-size:0.75rem">↻ 再読み込み</button>
+    <button class="btn-ghost hidden" id="btn-write-device" style="font-size:0.75rem">⚡ 実機に書き込み</button>
     <div class="spacer"></div>
     <span class="change-badge hidden" id="change-badge"></span>
     <button class="btn-success hidden" id="btn-save">💾 保存 (GitHub + 実機)</button>
@@ -724,23 +725,18 @@ function parseGetKeymapResponse(frame) {
   }
 
   const rrRf = protoFields(rrF.value);
-  // L2: RequestResponse の全フィールドを常に表示
-  log(`  L2 fields: ${rrRf.map(f=>`f${f.field}w${f.wire}`).join(', ')}`, 'log-info');
-
   // RequestResponse: field5 = KeymapResponse
   const kmF = pGet(rrRf, 5);
   if (!kmF?.value) {
-    log('  parse(L2): field5 なし → 全フィールドを確認してください', 'log-warn');
+    log(`  parse error L2: fields=${rrRf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
     return map;
   }
 
   const kmRf = protoFields(kmF.value);
-  log(`  L3 fields: ${kmRf.map(f=>`f${f.field}w${f.wire}`).join(', ')}`, 'log-info');
-
   // KeymapResponse: field1 = GetKeymapResponse
   const gkmF = pGet(kmRf, 1);
   if (!gkmF?.value) {
-    log('  parse(L3): field1 なし → KeymapResponse の構造が異なります', 'log-warn');
+    log(`  parse error L3: fields=${kmRf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
     return map;
   }
 
@@ -804,6 +800,7 @@ document.getElementById('btn-serial').addEventListener('click', async () => {
     setDevStatus(true, 'USB Serial 接続中');
     document.getElementById('btn-serial').classList.add('hidden');
     document.getElementById('btn-disconnect').classList.remove('hidden');
+    document.getElementById('btn-write-device').classList.remove('hidden');
     log('Serial 接続完了', 'log-ok');
   } catch (err) {
     log(`Serial エラー: ${err.message}`, 'log-error');
@@ -817,6 +814,7 @@ document.getElementById('btn-disconnect').addEventListener('click', async () => 
   setDevStatus(false, 'デバイス 未接続');
   document.getElementById('btn-serial').classList.remove('hidden');
   document.getElementById('btn-disconnect').classList.add('hidden');
+  document.getElementById('btn-write-device').classList.add('hidden');
   log('切断しました', 'log-warn');
 });
 
@@ -846,9 +844,9 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 
     // 2. GitHub PUT
     log('GitHub にプッシュ中...', 'log-info');
-    const changed    = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
-    const commitMsg  = `keymap: update ${changed} via zmk-keymap-sync`;
-    await ghPutFile(KEYMAP_PATH, newContent, S.keymapSha, commitMsg);
+    const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
+    const commitMsg = `keymap: update ${changed} via zmk-keymap-sync`;
+    const putResult = await ghPutFile(KEYMAP_PATH, newContent, S.keymapSha, commitMsg);
     log('✓ GitHub プッシュ完了 → GitHub Actions ビルド開始', 'log-ok');
     log(`  確認: https://github.com/${OWNER}/${REPO}/actions`, 'log-info');
 
@@ -857,7 +855,7 @@ document.getElementById('btn-save').addEventListener('click', async () => {
       log('実機に書き込み中...', 'log-info');
       await writeToDevice();
     } else {
-      log('デバイス未接続のため実機書き込みスキップ', 'log-warn');
+      log('デバイス未接続のため実機書き込みスキップ（実機書き込みボタンで後から書き込み可）', 'log-warn');
     }
 
     // 4. 状態リセット
@@ -867,9 +865,9 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     }
     S.edits = {};
 
-    // SHA を更新（次回保存用）
-    const { sha } = await ghGetFile(KEYMAP_PATH);
-    S.keymapSha = sha;
+    // PUT レスポンスから新しい SHA を取得（re-fetch だと CDN キャッシュで古い SHA が返ることがある）
+    S.keymapSha = putResult.content.sha;
+    S.keymapRaw = newContent;
 
     renderLayerTabs();
     updateChangeBadge();
@@ -940,6 +938,28 @@ async function writeToDevice() {
     );
   }
 }
+
+// ─────────────────────────────────────────────
+// 実機書き込みのみ（GitHub プッシュなし）
+// ─────────────────────────────────────────────
+document.getElementById('btn-write-device').addEventListener('click', async () => {
+  if (!S.transport) { log('デバイスが接続されていません', 'log-error'); return; }
+
+  const btn = document.getElementById('btn-write-device');
+  btn.disabled = true;
+  btn.textContent = '書き込み中...';
+
+  try {
+    log('実機に書き込み中...', 'log-info');
+    await writeToDevice();
+    log('✓ 実機書き込み完了', 'log-ok');
+  } catch (err) {
+    log(`実機書き込みエラー: ${err.message}`, 'log-error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ 実機に書き込み';
+  }
+});
 
 // ─────────────────────────────────────────────
 // PAT 設定
