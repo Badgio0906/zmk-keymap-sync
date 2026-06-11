@@ -724,18 +724,23 @@ function parseGetKeymapResponse(frame) {
   }
 
   const rrRf = protoFields(rrF.value);
+  // L2: RequestResponse の全フィールドを常に表示
+  log(`  L2 fields: ${rrRf.map(f=>`f${f.field}w${f.wire}`).join(', ')}`, 'log-info');
+
   // RequestResponse: field5 = KeymapResponse
   const kmF = pGet(rrRf, 5);
   if (!kmF?.value) {
-    log(`  parse(L2): fields=${rrRf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
+    log('  parse(L2): field5 なし → 全フィールドを確認してください', 'log-warn');
     return map;
   }
 
   const kmRf = protoFields(kmF.value);
+  log(`  L3 fields: ${kmRf.map(f=>`f${f.field}w${f.wire}`).join(', ')}`, 'log-info');
+
   // KeymapResponse: field1 = GetKeymapResponse
   const gkmF = pGet(kmRf, 1);
   if (!gkmF?.value) {
-    log(`  parse(L3): fields=${kmRf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
+    log('  parse(L3): field1 なし → KeymapResponse の構造が異なります', 'log-warn');
     return map;
   }
 
@@ -890,15 +895,15 @@ async function writeToDevice() {
     return;
   }
 
+  // 生バイト（先頭32バイト）をログ → プロトコル構造の確認用
+  const hexDump = Array.from(gmResp.slice(0, 32)).map(b => b.toString(16).padStart(2,'0')).join(' ');
+  log(`  raw[0..32]: ${hexDump}`, 'log-info');
+
   const deviceBindings = parseGetKeymapResponse(gmResp);
   log(`GetKeymap 受信: ${gmResp.length} bytes / ${deviceBindings.size} バインディング解析`, 'log-ok');
 
   if (deviceBindings.size === 0) {
-    // レスポンスは来たがパースできなかった場合 — 生データをログに出して原因調査
-    log('⚠ パース結果が空です。レスポンスの先頭フィールドを確認中...', 'log-warn');
-    const rf = protoFields(gmResp);
-    log(`  top fields: ${rf.map(f => `f${f.field}w${f.wire}`).join(', ')}`, 'log-warn');
-    log('実機書き込みをスキップします', 'log-warn');
+    log('⚠ パース結果が空です。実機書き込みをスキップします', 'log-warn');
     return;
   }
 
