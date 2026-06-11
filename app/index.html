@@ -752,10 +752,10 @@ function parseGetKeymapResponse(frame) {
     if (!lf.value) return;
     const lrf = protoFields(lf.value);
 
-    // KeymapLayer: field1 = id, field2 = bindings (repeated BehaviorBinding)
+    // KeymapLayer: field1 = id (省略時0), field2 = props(空), field3 = bindings
     const lidF     = pGet(lrf, 1);
     const layerIdx = lidF ? lidF.value : li;
-    const bindFs   = pGetAll(lrf, 2);
+    const bindFs   = pGetAll(lrf, 3);
 
     bindFs.forEach((bf, ki) => {
       if (!bf.value) return;
@@ -895,14 +895,13 @@ async function writeToDevice() {
     return;
   }
 
-  // 生バイト（先頭32バイト）をログ → プロトコル構造の確認用
-  const hexDump = Array.from(gmResp.slice(0, 32)).map(b => b.toString(16).padStart(2,'0')).join(' ');
-  log(`  raw[0..32]: ${hexDump}`, 'log-info');
-
   const deviceBindings = parseGetKeymapResponse(gmResp);
-  log(`GetKeymap 受信: ${gmResp.length} bytes / ${deviceBindings.size} バインディング解析`, 'log-ok');
+  log(`GetKeymap: ${gmResp.length} bytes → ${deviceBindings.size} バインディング取得`, 'log-ok');
 
   if (deviceBindings.size === 0) {
+    // デバッグ用: 先頭バイトとフィールド構造を出力
+    const hex = Array.from(gmResp.slice(0, 32)).map(b => b.toString(16).padStart(2,'0')).join(' ');
+    log(`  raw[0..32]: ${hex}`, 'log-warn');
     log('⚠ パース結果が空です。実機書き込みをスキップします', 'log-warn');
     return;
   }
@@ -931,10 +930,12 @@ async function writeToDevice() {
       continue;
     }
 
-    const pkt  = buildSetLayerBinding(reqId++, layerIdx, keyIdx, current.behaviorId, keycode, 0);
+    // ZMK param1 = (HID_USAGE_KEY_PAGE=0x07 << 16) | hid_keycode
+    const zmkParam1 = (0x07 << 16) | keycode;
+    const pkt  = buildSetLayerBinding(reqId++, layerIdx, keyIdx, current.behaviorId, zmkParam1, 0);
     const resp = await serialRpc(pkt);
     log(
-      `SetLayerBinding layer=${layerIdx} key=${keyIdx} ${newBinding} (behaviorId=${current.behaviorId}): ${resp ? 'OK' : 'タイムアウト'}`,
+      `SetLayerBinding layer=${layerIdx} key=${keyIdx} ${newBinding} (id=${current.behaviorId} param1=0x${zmkParam1.toString(16)}): ${resp ? 'OK' : 'タイムアウト'}`,
       resp ? 'log-ok' : 'log-warn',
     );
   }
