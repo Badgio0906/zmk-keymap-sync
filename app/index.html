@@ -709,31 +709,48 @@ function buildGetKeymapRequest(reqId) {
 }
 
 // GetKeymap レスポンスをパースして Map<"layerIdx:keyIdx", {behaviorId,param1,param2}> を返す
+//
+// ZMK RPC レスポンスの2層構造:
+//   RpcResponse { field1(wire2): RequestResponse { field1: requestId, field5: KeymapResponse } }
 function parseGetKeymapResponse(frame) {
   const map = new Map();
   const rf  = protoFields(frame);
 
-  // Response field5 = keymap response
-  const kmF = pGet(rf, 5);
-  if (!kmF?.value) return map;
+  // 最外層: field 1 (wire 2) = RequestResponse ラッパー
+  const rrF = pGet(rf, 1);
+  if (!rrF?.value) {
+    log(`  parse(L1): fields=${rf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
+    return map;
+  }
+
+  const rrRf = protoFields(rrF.value);
+  // RequestResponse: field5 = KeymapResponse
+  const kmF = pGet(rrRf, 5);
+  if (!kmF?.value) {
+    log(`  parse(L2): fields=${rrRf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
+    return map;
+  }
 
   const kmRf = protoFields(kmF.value);
-  // KeymapResponse field1 = get_keymap
+  // KeymapResponse: field1 = GetKeymapResponse
   const gkmF = pGet(kmRf, 1);
-  if (!gkmF?.value) return map;
+  if (!gkmF?.value) {
+    log(`  parse(L3): fields=${kmRf.map(f=>`f${f.field}w${f.wire}`).join(',')}`, 'log-warn');
+    return map;
+  }
 
-  const gkmRf  = protoFields(gkmF.value);
-  // GetKeymapResponse field1 = layers (repeated)
+  const gkmRf   = protoFields(gkmF.value);
+  // GetKeymapResponse: field1 = layers (repeated)
   const layerFs = pGetAll(gkmRf, 1);
 
   layerFs.forEach((lf, li) => {
     if (!lf.value) return;
     const lrf = protoFields(lf.value);
 
-    // LayerConfig field1 = id (uint32), field2 = bindings (repeated BehaviorBinding)
-    const lidF    = pGet(lrf, 1);
+    // KeymapLayer: field1 = id, field2 = bindings (repeated BehaviorBinding)
+    const lidF     = pGet(lrf, 1);
     const layerIdx = lidF ? lidF.value : li;
-    const bindFs  = pGetAll(lrf, 2);
+    const bindFs   = pGetAll(lrf, 2);
 
     bindFs.forEach((bf, ki) => {
       if (!bf.value) return;
