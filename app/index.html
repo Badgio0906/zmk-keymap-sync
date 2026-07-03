@@ -1659,19 +1659,8 @@ async function writeToDevice() {
     return;
   }
 
-  // 2. GitHub のオリジナルバインディングと照合して behavior 名 → ID マップを構築
-  const behIdMap = {};
-  deviceBindings.forEach((devBind, key) => {
-    const [li, ki] = key.split(':').map(Number);
-    const layer = S.layers[li];
-    if (!layer) return;
-    const ghBinding = layer.originalBindings[ki];
-    if (!ghBinding) return;
-    const m = ghBinding.match(/^&(\S+)/);
-    if (m && !(m[1] in behIdMap)) {
-      behIdMap[m[1]] = devBind.behaviorId;
-    }
-  });
+  // 2. behavior 名→ID マップを堅牢に構築（param 一致位置のみ・矛盾除外）
+  const { behIdMap } = buildBehIdMap(deviceBindings, S.layers);
   log(`behavior IDs: ${Object.entries(behIdMap).map(([k,v])=>`${k}=${v}`).join(', ')}`, 'log-info');
 
   // 3. 変更キーを書き込む
@@ -1720,6 +1709,39 @@ function buildReverseHidKp() {
   };
   for (const [code, name] of Object.entries(prefer)) rev.set(Number(code), name);
   return rev;
+}
+
+// behavior 名→ID マップを堅牢に構築する共通ヘルパー
+// 学習条件: GitHub と実機で param1/param2 が完全一致するキー位置のみ
+// 矛盾除外: 同一 behavior 名が複数の異なる ID に対応する場合は除外（単射を強制）
+// 返値: { behIdMap: {behName→id}, conflictNames: Set<string> }
+function buildBehIdMap(deviceBindings, layers) {
+  const candidates = {};  // behName → Set<behaviorId>
+
+  deviceBindings.forEach(({ behaviorId, param1, param2 }, key) => {
+    const [li, ki] = key.split(':').map(Number);
+    const layer = layers[li];
+    if (!layer) return;
+    const ghBinding = layer.originalBindings[ki];
+    if (!ghBinding) return;
+    const ghParsed = parseBindingForRpc(ghBinding);
+    if (!ghParsed) return;
+    // param 完全一致のみ学習（behavior 型も一致していると判断できる）
+    if (ghParsed.p1 !== param1 || ghParsed.p2 !== param2) return;
+    if (!candidates[ghParsed.beh]) candidates[ghParsed.beh] = new Set();
+    candidates[ghParsed.beh].add(behaviorId);
+  });
+
+  const behIdMap = {}, conflictNames = new Set();
+  for (const [behName, ids] of Object.entries(candidates)) {
+    if (ids.size === 1) {
+      behIdMap[behName] = [...ids][0];
+    } else {
+      conflictNames.add(behName);
+      log(`behavior ID マップ: "&${behName}" は複数のID(${[...ids].join(',')})に対応 — 除外します`, 'log-warn');
+    }
+  }
+  return { behIdMap, conflictNames };
 }
 
 // デバイスの {behaviorId, param1, param2} → ZMK binding 文字列
@@ -1783,27 +1805,16 @@ async function loadFromDevice() {
     log(`GetKeymap: ${deviceBindings.size} バインディング取得`, 'log-ok');
     if (deviceBindings.size === 0) { log('レスポンスのパースに失敗しました', 'log-error'); return; }
 
-    // 2. GitHub データで behavior ID → 名前マップを構築
-    const idToBeh = {};
-    deviceBindings.forEach(({ behaviorId }, key) => {
-      const [li, ki] = key.split(':').map(Number);
-      const layer = S.layers[li];
-      if (!layer) return;
-      const ghBind = layer.originalBindings[ki];
-      if (!ghBind) return;
-      const m = ghBind.match(/^&(\S+)/);
-      if (m && !(behaviorId in idToBeh)) idToBeh[behaviorId] = m[1];
-    });
-    log(`ビヘイビア ID: ${Object.entries(idToBeh).map(([k,v])=>`${k}=&${v}`).join(', ')}`, 'log-info');
+    // 2. behavior 名→ID マップを堅牢に構築（param 一致位置のみ・矛盾除外）
+    const { behIdMap, conflictNames } = buildBehIdMap(deviceBindings, S.layers);
+    // ID→名前の逆引き（deviceBindingToString 用）
+    const idToBeh = Object.fromEntries(Object.entries(behIdMap).map(([n, id]) => [id, n]));
+    log(`ビヘイビア ID: ${Object.entries(behIdMap).map(([n,id])=>`${n}=${id}`).join(', ')}`, 'log-info');
 
     // 3. binding 文字列に変換（GitHub 値から開始し、値レベルで一致すれば GitHub 文字列を保持）
     const reverseKp   = buildReverseHidKp();
     const newBindings = S.layers.map(l => [...l.originalBindings]); // GitHub 文字列を初期値に
     let decoded = 0, unknown = 0;
-
-    // behavior 名 → ID 逆引きマップ
-    const nameToId = {};
-    Object.entries(idToBeh).forEach(([id, name]) => { nameToId[name] = Number(id); });
 
     deviceBindings.forEach(({ behaviorId, param1, param2 }, key) => {
       const [li, ki] = key.split(':').map(Number);
@@ -1812,7 +1823,7 @@ async function loadFromDevice() {
       // GitHub 文字列をパースして値レベルで一致するか確認
       const ghStr = S.layers[li].originalBindings[ki];
       const ghRpc = parseBindingForRpc(ghStr);
-      if (ghRpc && nameToId[ghRpc.beh] === behaviorId
+      if (ghRpc && behIdMap[ghRpc.beh] === behaviorId
           && ghRpc.p1 === param1 && ghRpc.p2 === param2) {
         // 同一値 → 表記の差は無視し GitHub 文字列をそのまま保持
         decoded++;
@@ -1832,9 +1843,6 @@ async function loadFromDevice() {
     S.githubSaved = {};
     S.idToBeh = idToBeh;
 
-    // behavior 名の集合（適用可判定用）
-    const devBehNames = new Set(Object.values(idToBeh));
-
     // 差分一覧を構築（差分パネル用）
     const diffItems = [];
     S.layers.forEach((layer, li) => {
@@ -1844,9 +1852,18 @@ async function loadFromDevice() {
         const devBinding = layer.bindings[ki];
         if (devBinding !== ghBinding) {
           S.edits[`${li}:${ki}`] = devBinding;
-          const parsed   = parseBindingForRpc(ghBinding);
-          const canApply = !!(parsed && devBehNames.has(parsed.beh));
-          diffItems.push({ layerIdx: li, layerName: layer.name, keyIdx: ki, ghBinding, devBinding, canApply });
+          const parsed = parseBindingForRpc(ghBinding);
+          let canApply = false, reason = '';
+          if (!parsed) {
+            reason = '未対応構文';
+          } else if (parsed.beh in behIdMap) {
+            canApply = true;
+          } else if (conflictNames.has(parsed.beh)) {
+            reason = 'behavior ID 未確定（矛盾）';
+          } else {
+            reason = 'behavior ID 未確定';
+          }
+          diffItems.push({ layerIdx: li, layerName: layer.name, keyIdx: ki, ghBinding, devBinding, canApply, reason });
         }
       }
       layer.dirty = layer.bindings.some((b, i) => b !== layer.originalBindings[i]);
@@ -1896,7 +1913,7 @@ function renderDiffPanel() {
       <td>${d.devBinding}</td>
       <td>${d.canApply
         ? '<span class="diff-ok">✓ 適用可</span>'
-        : '<span class="diff-na">✕ 適用不可</span>'}</td>
+        : `<span class="diff-na">✕ 適用不可${d.reason ? ` — ${d.reason}` : ''}</span>`}</td>
     </tr>
   `).join('');
 
@@ -1923,17 +1940,8 @@ async function applyGithubToDevice() {
     const deviceBindings = parseGetKeymapResponse(gmResp);
     if (deviceBindings.size === 0) { log('GetKeymap のパースに失敗しました', 'log-error'); return; }
 
-    // behavior 名 → ID マップを構築（GitHub の originalBindings と照合）
-    const behIdMap = {};
-    deviceBindings.forEach((devBind, key) => {
-      const [li, ki] = key.split(':').map(Number);
-      const layer = S.layers[li];
-      if (!layer) return;
-      const ghBinding = layer.originalBindings[ki];
-      if (!ghBinding) return;
-      const m = ghBinding.match(/^&(\S+)/);
-      if (m && !(m[1] in behIdMap)) behIdMap[m[1]] = devBind.behaviorId;
-    });
+    // behavior 名→ID マップを堅牢に構築（param 一致位置のみ・矛盾除外）
+    const { behIdMap } = buildBehIdMap(deviceBindings, S.layers);
     log(`behavior IDs: ${Object.entries(behIdMap).map(([k,v])=>`${k}=${v}`).join(', ')}`, 'log-info');
 
     // 2. 差分キーに GitHub の値を書き込む
@@ -1959,27 +1967,78 @@ async function applyGithubToDevice() {
       if (resp) written++; else skipped++;
     }
 
-    log(`✓ 適用完了 — 書き込み: ${written} / スキップ: ${skipped}`, 'log-ok');
+    log(`書き込み完了 — 書き込み: ${written} / スキップ: ${skipped}`, written > 0 ? 'log-ok' : 'log-warn');
 
+    // 3. 適用後検証（GetKeymap で一致を確認）
+    if (written > 0) {
+      log('適用結果を検証中 (GetKeymap)...', 'log-info');
+      const verifyReqId = nextRpcReqId();
+      const verifyResp  = await serialRpc(buildGetKeymapRequest(verifyReqId), 6000, verifyReqId);
+
+      if (!verifyResp) {
+        log('⚠ 検証のGetKeymapがタイムアウト — 手動で逆読み込みを実行してください', 'log-warn');
+      } else {
+        const verifyBindings = parseGetKeymapResponse(verifyResp);
+        const reverseKp      = buildReverseHidKp();
+        const idToBehLocal   = Object.fromEntries(Object.entries(behIdMap).map(([n, id]) => [id, n]));
+        let verifiedOk = 0;
+        const stillDiff = [];
+
+        for (const item of applicable) {
+          const vBind    = verifyBindings.get(`${item.layerIdx}:${item.keyIdx}`);
+          const ghParsed = parseBindingForRpc(item.ghBinding);
+          if (vBind && ghParsed
+              && behIdMap[ghParsed.beh] === vBind.behaviorId
+              && ghParsed.p1 === vBind.param1
+              && ghParsed.p2 === vBind.param2) {
+            verifiedOk++;
+          } else {
+            const devBehName = vBind ? (idToBehLocal[vBind.behaviorId] ?? `id:${vBind.behaviorId}`) : '?';
+            const devStr = vBind
+              ? (deviceBindingToString(devBehName, vBind.param1, vBind.param2, reverseKp) ?? devBehName)
+              : '読み取り不可';
+            log(`  ⚠ L${item.layerIdx}:K${item.keyIdx} 不一致 — 実機: ${devStr} / GitHub: ${item.ghBinding}`, 'log-warn');
+            stillDiff.push({ ...item, devBinding: devStr });
+          }
+        }
+
+        log(`✓ 検証完了 — 一致: ${verifiedOk} / 不一致: ${stillDiff.length}`, stillDiff.length === 0 ? 'log-ok' : 'log-warn');
+
+        // 差分一覧を更新: 適用不可 + 書き込み後も不一致のものを残す
+        S.diffItems = [...S.diffItems.filter(d => !d.canApply), ...stillDiff];
+      }
+    }
+
+    // 4. 適用不可キーの案内
     const naItems = S.diffItems.filter(d => !d.canApply);
     if (naItems.length > 0) {
-      log(`  適用不可 ${naItems.length} 件は「Restore Stock Settings」後に再フラッシュが必要です`, 'log-warn');
+      log(`  適用不可 ${naItems.length} 件の手順:`, 'log-warn');
+      log('    1. 未保存の変更がすべてGitHubに保存済みであることを確認', 'log-warn');
+      log('    2. GitHubソースからビルドし、生成されたファームウェアを手動でフラッシュ', 'log-warn');
+      log('    3. ZMK Studioまたは本アプリから Restore Stock Settings（設定リセット）を実行', 'log-warn');
+      log('       ※実機のRPC変更はすべて消えます。手順1の確認が必須です', 'log-warn');
+      log('    4. 本アプリの逆読み込みで実機とGitHubの一致を確認', 'log-warn');
     }
 
-    // 3. 状態リセット（GitHub 値が実機に適用されたため差分解消）
-    if (written > 0) {
-      S.edits = {};
-      S.githubSaved = {};
-      S.diffItems = [];
-      S.layers.forEach(layer => {
-        layer.bindings = [...layer.originalBindings];
-        layer.dirty    = false;
-      });
-      document.getElementById('diff-panel').classList.add('hidden');
-      renderLayerTabs();
-      renderKeyboard();
-      updateChangeBadge();
+    // 5. 状態リセット
+    S.edits = {};
+    S.githubSaved = {};
+    // 差分パネルに残るものがあれば S.edits に記録してキーボード表示に反映
+    S.layers.forEach(layer => { layer.bindings = [...layer.originalBindings]; layer.dirty = false; });
+    for (const item of S.diffItems) {
+      S.edits[`${item.layerIdx}:${item.keyIdx}`] = item.devBinding;
+      S.layers[item.layerIdx].bindings[item.keyIdx] = item.devBinding;
+      S.layers[item.layerIdx].dirty = true;
     }
+    if (S.diffItems.length > 0) {
+      renderDiffPanel();
+      document.getElementById('diff-panel').classList.remove('hidden');
+    } else {
+      document.getElementById('diff-panel').classList.add('hidden');
+    }
+    renderLayerTabs();
+    renderKeyboard();
+    updateChangeBadge();
 
   } catch (err) {
     log(`適用エラー: ${err.message}`, 'log-error');
