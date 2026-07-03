@@ -386,6 +386,23 @@
   </div>
 </div>
 
+<!-- SHA競合モーダル -->
+<div class="modal-overlay hidden" id="sha-conflict-modal">
+  <div class="modal-box">
+    <h2>⚠ 競合を検出</h2>
+    <p style="font-size:0.85rem;color:var(--text);margin-bottom:10px">
+      GitHub上でファイルが変更されています。このまま保存するとリモートの変更が上書きされます。
+    </p>
+    <p style="font-size:0.82rem;color:var(--yellow);margin-bottom:18px">
+      「リモートを再読み込み」すると、ローカルの未保存編集（<span id="sha-conflict-count">0</span> 件）が破棄されます。
+    </p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-sha-cancel">キャンセル</button>
+      <button class="btn-danger" id="btn-sha-reload">リモートを再読み込み</button>
+    </div>
+  </div>
+</div>
+
 <!-- ヘッダー -->
 <header>
   <h1 style="font-size:0.95rem;white-space:nowrap;">ZMK Keymap Sync</h1>
@@ -542,6 +559,7 @@ const S = {
   diffItems:    [],        // 実機/GitHub 差分一覧（差分パネル用）
   idToBeh:      {},        // 最後の GetKeymap から得た behaviorId→名前マップ
   building:     false,     // GitHub Actions ビルド中ロック状態
+  buildPollToken: 0,       // インクリメントで実行中ポーラーをキャンセル
 };
 
 // ─────────────────────────────────────────────
@@ -1599,9 +1617,15 @@ document.getElementById('btn-save').addEventListener('click', async () => {
       // SHA 競合チェック：push 前に最新 SHA を再取得し、差異があれば中止
       const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
       if (latestSha !== S.keymapSha) {
-        log('⚠ GitHub上でファイルが変更されています — 保存を中止しました', 'log-warn');
-        log('  「リロード」ボタンでGitHubの最新内容を再読み込みし、編集をやり直してください', 'log-warn');
-        log('  ※現在の編集内容はまだ保持されています', 'log-info');
+        log('⚠ GitHub上でファイルが変更されています', 'log-warn');
+        const editCount = Object.keys(S.edits).length;
+        const choice    = await showShaConflictModal(editCount);
+        if (choice === 'reload') {
+          log('リモートを再読み込みします...', 'log-info');
+          await loadData();
+        } else {
+          log('  保存をキャンセルしました — ローカルの編集内容は保持されています', 'log-info');
+        }
         return;
       }
 
@@ -1742,6 +1766,33 @@ function buildReverseHidKp() {
 }
 
 // ─────────────────────────────────────────────
+// SHA競合モーダル
+// ─────────────────────────────────────────────
+function showShaConflictModal(editCount) {
+  return new Promise(resolve => {
+    document.getElementById('sha-conflict-count').textContent = editCount;
+    document.getElementById('sha-conflict-modal').classList.remove('hidden');
+
+    const onReload = () => {
+      document.getElementById('sha-conflict-modal').classList.add('hidden');
+      cleanup();
+      resolve('reload');
+    };
+    const onCancel = () => {
+      document.getElementById('sha-conflict-modal').classList.add('hidden');
+      cleanup();
+      resolve('cancel');
+    };
+    const cleanup = () => {
+      document.getElementById('btn-sha-reload').removeEventListener('click', onReload);
+      document.getElementById('btn-sha-cancel').removeEventListener('click', onCancel);
+    };
+    document.getElementById('btn-sha-reload').addEventListener('click', onReload);
+    document.getElementById('btn-sha-cancel').addEventListener('click', onCancel);
+  });
+}
+
+// ─────────────────────────────────────────────
 // GitHub Actions ビルド監視
 // ─────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1762,52 +1813,29 @@ function showBuildStatus(state, text) {
   el.textContent = text;
 }
 
-async function pollBuildStatus(headSha) {
-  const { owner, repo } = S.kb;
-  const FIND_RETRIES  = 10;
-  const FIND_INTERVAL = 10_000;    // 10秒×10回 = 最大100秒で run を待つ
-  const POLL_INTERVAL = 20_000;    // 20秒ごとにポーリング
-  const MAX_ELAPSED   = 15 * 60 * 1000;  // 最大15分
+// 単一runをポーリング（tokenが変わったら即座に終了）
+async function _pollRunLoop(runId, pollOwner, pollRepo, token) {
+  const MAX_ELAPSED   = 15 * 60 * 1000;
+  const POLL_INTERVAL = 20_000;
   const startTime     = Date.now();
 
-  // push直後は run 作成に遅延がある — 見つかるまでリトライ
-  showBuildStatus('queued', '⏳ ビルド開始待ち');
-  let runId = null;
-  for (let i = 0; i < FIND_RETRIES; i++) {
-    await sleep(FIND_INTERVAL);
-    try {
-      const data = await ghFetch(`/repos/${owner}/${repo}/actions/runs?head_sha=${headSha}&per_page=5`);
-      if (data.workflow_runs && data.workflow_runs.length > 0) {
-        runId = data.workflow_runs[0].id;
-        break;
-      }
-    } catch (e) {
-      log(`Actions run 検索エラー: ${e.message}`, 'log-warn');
-    }
-  }
-
-  if (!runId) {
-    log('ビルド設定なし（Actionsワークフローが検出されませんでした） — 通常操作を継続します', 'log-info');
-    document.getElementById('build-status').classList.add('hidden');
-    setBuildLock(false);
-    return;
-  }
-
-  log(`ビルドを追跡中 (run #${runId})...`, 'log-info');
-
   while (true) {
+    if (token !== S.buildPollToken) return;
+
     if (Date.now() - startTime > MAX_ELAPSED) {
+      if (token !== S.buildPollToken) return;
       log('⚠ ビルド確認タイムアウト（15分） — 手動で確認してください', 'log-warn');
-      log(`  https://github.com/${owner}/${repo}/actions`, 'log-info');
+      log(`  https://github.com/${pollOwner}/${pollRepo}/actions`, 'log-info');
       showBuildStatus('queued', '⚠ タイムアウト');
       setBuildLock(false);
       return;
     }
 
     try {
-      const run = await ghFetch(`/repos/${owner}/${repo}/actions/runs/${runId}`);
-      const { status, conclusion } = run;
+      const run = await ghFetch(`/repos/${pollOwner}/${pollRepo}/actions/runs/${runId}`);
+      if (token !== S.buildPollToken) return;
 
+      const { status, conclusion } = run;
       if (status === 'completed') {
         if (conclusion === 'success') {
           log('✓ GitHubビルド成功！', 'log-ok');
@@ -1815,7 +1843,7 @@ async function pollBuildStatus(headSha) {
         } else {
           log(`✗ GitHubビルド失敗 (${conclusion})`, 'log-error');
           log('  GitHubのActionsログを確認し、再度保存でリトライしてください', 'log-warn');
-          log(`  https://github.com/${owner}/${repo}/actions/runs/${runId}`, 'log-info');
+          log(`  https://github.com/${pollOwner}/${pollRepo}/actions/runs/${runId}`, 'log-info');
           showBuildStatus('failure', `✗ ビルド失敗 (${conclusion})`);
         }
         setBuildLock(false);
@@ -1825,12 +1853,74 @@ async function pollBuildStatus(headSha) {
       const isQueued = status === 'queued';
       showBuildStatus(isQueued ? 'queued' : 'progress', isQueued ? '⏳ ビルド待機中' : '⚙ ビルド中');
       log(`ビルド${isQueued ? '待機中' : '実行中'}...`, 'log-info');
-
     } catch (e) {
+      if (token !== S.buildPollToken) return;
       log(`ビルドステータス確認エラー: ${e.message}`, 'log-warn');
     }
 
+    if (token !== S.buildPollToken) return;
     await sleep(POLL_INTERVAL);
+  }
+}
+
+// push後: headShaからrunを特定してポーリング開始
+async function pollBuildStatus(headSha) {
+  const { owner, repo } = S.kb;
+  const token           = ++S.buildPollToken;
+  const FIND_RETRIES    = 10;
+  const FIND_INTERVAL   = 10_000;
+
+  showBuildStatus('queued', '⏳ ビルド開始待ち');
+  let runId = null;
+  for (let i = 0; i < FIND_RETRIES; i++) {
+    await sleep(FIND_INTERVAL);
+    if (token !== S.buildPollToken) return;
+    try {
+      const data = await ghFetch(`/repos/${owner}/${repo}/actions/runs?head_sha=${headSha}&per_page=5`);
+      if (token !== S.buildPollToken) return;
+      if (data.workflow_runs && data.workflow_runs.length > 0) {
+        runId = data.workflow_runs[0].id;
+        break;
+      }
+    } catch (e) {
+      if (token !== S.buildPollToken) return;
+      log(`Actions run 検索エラー: ${e.message}`, 'log-warn');
+    }
+  }
+
+  if (token !== S.buildPollToken) return;
+  if (!runId) {
+    log('ビルド設定なし（Actionsワークフローが検出されませんでした） — 通常操作を継続します', 'log-info');
+    document.getElementById('build-status').classList.add('hidden');
+    setBuildLock(false);
+    return;
+  }
+
+  log(`ビルドを追跡中 (run #${runId})...`, 'log-info');
+  await _pollRunLoop(runId, owner, repo, token);
+}
+
+// KB切り替え後: 最新runを1回確認し、進行中なら追跡再開
+async function checkAndResumeBuild() {
+  const { owner, repo } = S.kb;
+  const token           = S.buildPollToken;  // KB切り替えで既にインクリメント済み
+  if (!S.pat) return;
+  try {
+    const data = await ghFetch(`/repos/${owner}/${repo}/actions/runs?per_page=1`);
+    if (token !== S.buildPollToken) return;
+    const run = data.workflow_runs?.[0];
+    if (!run || run.status === 'completed') {
+      document.getElementById('build-status').classList.add('hidden');
+      return;
+    }
+    log(`KB ${owner}/${repo} にアクティブなビルドを検出 (run #${run.id}) — 追跡を再開します`, 'log-info');
+    setBuildLock(true);
+    const isQueued = run.status === 'queued';
+    showBuildStatus(isQueued ? 'queued' : 'progress', isQueued ? '⏳ ビルド待機中' : '⚙ ビルド中');
+    await _pollRunLoop(run.id, owner, repo, token);
+  } catch (e) {
+    if (token !== S.buildPollToken) return;
+    document.getElementById('build-status').classList.add('hidden');
   }
 }
 
@@ -2483,11 +2573,12 @@ function updateKbSwitcher() {
       setActiveKbId(id);
       S.kb = getActiveKb();
       S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+      S.buildPollToken++;
       setBuildLock(false);
-      document.getElementById('build-status').classList.add('hidden');
       updateKbSwitcher();
       closeKbDropdown();
       loadData();
+      checkAndResumeBuild().catch(() => {});
     });
   });
 
@@ -2669,9 +2760,10 @@ document.getElementById('kb-modal-delete').addEventListener('click', () => {
   document.getElementById('kb-modal').classList.add('hidden');
   updateKbSwitcher();
   S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+  S.buildPollToken++;
   setBuildLock(false);
-  document.getElementById('build-status').classList.add('hidden');
   loadData();
+  checkAndResumeBuild().catch(() => {});
 });
 
 document.getElementById('kb-modal-save').addEventListener('click', () => {
@@ -2700,9 +2792,10 @@ document.getElementById('kb-modal-save').addEventListener('click', () => {
   document.getElementById('kb-modal').classList.add('hidden');
   updateKbSwitcher();
   S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+  S.buildPollToken++;
   setBuildLock(false);
-  document.getElementById('build-status').classList.add('hidden');
   loadData();
+  checkAndResumeBuild().catch(() => {});
 });
 
 // ─────────────────────────────────────────────
