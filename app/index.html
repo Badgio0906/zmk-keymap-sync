@@ -237,6 +237,18 @@
     #key-modal .beh-desc-body     { font-size: 0.91rem; margin-bottom: 12px; }
     #key-modal .beh-desc-example  { font-size: 0.86rem; padding: 10px 13px; }
     #key-modal .beh-desc-badge    { font-size: 0.82rem; padding: 3px 10px; }
+
+    /* ── 差分パネル ── */
+    .diff-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .diff-panel h3 { font-size: 0.85rem; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .diff-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+    .diff-table th { background: var(--bg); padding: 5px 10px; text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+    .diff-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: Consolas, monospace; font-size: 0.75rem; }
+    .diff-table tr:last-child td { border-bottom: none; }
+    .diff-table tr:hover td { background: var(--bg); }
+    .diff-na { color: var(--red); font-size: 0.72rem; font-family: sans-serif; }
+    .diff-ok { color: var(--green); font-size: 0.72rem; font-family: sans-serif; }
+    .diff-actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
   </style>
 </head>
 <body>
@@ -433,6 +445,34 @@
     <button class="btn-success hidden" id="btn-save">💾 保存 (GitHub + 実機)</button>
   </div>
 
+  <!-- 差分パネル（実機/GitHub 差分） -->
+  <div class="diff-panel hidden" id="diff-panel">
+    <h3>
+      実機 / GitHub 差分
+      <span id="diff-summary" style="font-size:0.72rem;color:var(--muted);font-weight:normal;"></span>
+    </h3>
+    <div style="overflow-x:auto;max-height:260px;overflow-y:auto">
+      <table class="diff-table">
+        <thead>
+          <tr>
+            <th>レイヤー</th>
+            <th>キー位置</th>
+            <th>GitHub の値</th>
+            <th>実機の値</th>
+            <th>状態</th>
+          </tr>
+        </thead>
+        <tbody id="diff-table-body"></tbody>
+      </table>
+    </div>
+    <div class="diff-actions">
+      <button class="btn-primary" id="btn-apply-github-to-device" style="font-size:0.78rem">⬇ GitHubを実機に適用</button>
+      <button class="btn-ghost" id="btn-apply-device-to-github" style="font-size:0.78rem">⬆ 実機をGitHubに反映（↓保存ボタンで実行）</button>
+      <div style="flex:1"></div>
+      <button class="btn-ghost" id="btn-diff-dismiss" style="font-size:0.72rem;color:var(--muted)">閉じる</button>
+    </div>
+  </div>
+
   <!-- ログ -->
   <div class="log-card">
     <div class="log-header">
@@ -490,6 +530,8 @@ const S = {
   edits:        {},        // 未 GitHub push の変更
   githubSaved:  {},        // GitHub push 済み・実機未書き込みの変更
   transport:    null,
+  diffItems:    [],        // 実機/GitHub 差分一覧（差分パネル用）
+  idToBeh:      {},        // 最後の GetKeymap から得た behaviorId→名前マップ
 };
 
 // ─────────────────────────────────────────────
@@ -1788,26 +1830,41 @@ async function loadFromDevice() {
     // 4. S.layers に反映し、GitHub との差分を S.edits に記録
     S.edits = {};
     S.githubSaved = {};
+    S.idToBeh = idToBeh;
+
+    // behavior 名の集合（適用可判定用）
+    const devBehNames = new Set(Object.values(idToBeh));
+
+    // 差分一覧を構築（差分パネル用）
+    const diffItems = [];
     S.layers.forEach((layer, li) => {
       layer.bindings = newBindings[li];
       for (let ki = 0; ki < layer.bindings.length; ki++) {
-        if (layer.bindings[ki] !== layer.originalBindings[ki]) {
-          S.edits[`${li}:${ki}`] = layer.bindings[ki];
+        const ghBinding  = layer.originalBindings[ki];
+        const devBinding = layer.bindings[ki];
+        if (devBinding !== ghBinding) {
+          S.edits[`${li}:${ki}`] = devBinding;
+          const parsed   = parseBindingForRpc(ghBinding);
+          const canApply = !!(parsed && devBehNames.has(parsed.beh));
+          diffItems.push({ layerIdx: li, layerName: layer.name, keyIdx: ki, ghBinding, devBinding, canApply });
         }
       }
       layer.dirty = layer.bindings.some((b, i) => b !== layer.originalBindings[i]);
     });
+    S.diffItems = diffItems;
 
     renderLayerTabs();
     renderKeyboard();
     updateChangeBadge();
     log(`✓ 実機読み込み完了 — デコード: ${decoded} キー / 不明 behavior: ${unknown} キー`, 'log-ok');
 
-    const diffCount = Object.keys(S.edits).length;
-    if (diffCount > 0) {
-      log(`  GitHub との差分: ${diffCount} 件 — 「保存 (GitHub + 実機)」で GitHub に反映できます`, 'log-warn');
+    if (diffItems.length > 0) {
+      log(`  GitHub との差分: ${diffItems.length} 件`, 'log-warn');
+      renderDiffPanel();
+      document.getElementById('diff-panel').classList.remove('hidden');
     } else {
       log('  実機と GitHub のキーマップは一致しています', 'log-ok');
+      document.getElementById('diff-panel').classList.add('hidden');
     }
 
   } catch (err) {
@@ -1819,6 +1876,129 @@ async function loadFromDevice() {
 }
 
 document.getElementById('btn-read-device').addEventListener('click', loadFromDevice);
+
+// ─────────────────────────────────────────────
+// 差分パネル
+// ─────────────────────────────────────────────
+function renderDiffPanel() {
+  const items    = S.diffItems;
+  const naCount  = items.filter(d => !d.canApply).length;
+  const okCount  = items.length - naCount;
+
+  document.getElementById('diff-summary').textContent =
+    `${items.length} 件の差分 (適用可: ${okCount} / 適用不可: ${naCount})`;
+
+  document.getElementById('diff-table-body').innerHTML = items.map(d => `
+    <tr>
+      <td>${d.layerIdx}: ${d.layerName}</td>
+      <td>${d.keyIdx}</td>
+      <td>${d.ghBinding}</td>
+      <td>${d.devBinding}</td>
+      <td>${d.canApply
+        ? '<span class="diff-ok">✓ 適用可</span>'
+        : '<span class="diff-na">✕ 適用不可</span>'}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('btn-apply-github-to-device').disabled =
+    items.filter(d => d.canApply).length === 0;
+}
+
+async function applyGithubToDevice() {
+  if (!S.transport) { log('デバイスが接続されていません', 'log-error'); return; }
+  const applicable = S.diffItems.filter(d => d.canApply);
+  if (applicable.length === 0) { log('適用可能な差分がありません', 'log-warn'); return; }
+
+  const btn = document.getElementById('btn-apply-github-to-device');
+  btn.disabled = true;
+  btn.textContent = '適用中...';
+
+  try {
+    // 1. GetKeymap で実機の behavior ID を再取得（最新状態で確認）
+    log('実機キーマップを確認中 (GetKeymap)...', 'log-info');
+    const gmReqId = nextRpcReqId();
+    const gmResp  = await serialRpc(buildGetKeymapRequest(gmReqId), 6000, gmReqId);
+    if (!gmResp) { log('GetKeymap タイムアウト — 適用を中止します', 'log-error'); return; }
+
+    const deviceBindings = parseGetKeymapResponse(gmResp);
+    if (deviceBindings.size === 0) { log('GetKeymap のパースに失敗しました', 'log-error'); return; }
+
+    // behavior 名 → ID マップを構築（GitHub の originalBindings と照合）
+    const behIdMap = {};
+    deviceBindings.forEach((devBind, key) => {
+      const [li, ki] = key.split(':').map(Number);
+      const layer = S.layers[li];
+      if (!layer) return;
+      const ghBinding = layer.originalBindings[ki];
+      if (!ghBinding) return;
+      const m = ghBinding.match(/^&(\S+)/);
+      if (m && !(m[1] in behIdMap)) behIdMap[m[1]] = devBind.behaviorId;
+    });
+    log(`behavior IDs: ${Object.entries(behIdMap).map(([k,v])=>`${k}=${v}`).join(', ')}`, 'log-info');
+
+    // 2. 差分キーに GitHub の値を書き込む
+    let written = 0, skipped = 0;
+    for (const item of applicable) {
+      const parsed = parseBindingForRpc(item.ghBinding);
+      if (!parsed) {
+        log(`"${item.ghBinding}" は未対応の構文 — スキップ`, 'log-warn');
+        skipped++; continue;
+      }
+      const behId = behIdMap[parsed.beh];
+      if (behId === undefined) {
+        log(`"&${parsed.beh}" の behavior ID が不明 — スキップ (L${item.layerIdx}:K${item.keyIdx})`, 'log-warn');
+        skipped++; continue;
+      }
+      const reqId = nextRpcReqId();
+      const pkt   = buildSetLayerBinding(reqId, item.layerIdx, item.keyIdx, behId, parsed.p1, parsed.p2);
+      const resp  = await serialRpc(pkt, 3000, reqId);
+      log(
+        `SetLayerBinding L${item.layerIdx}:K${item.keyIdx} ${item.ghBinding} (id=${behId}): ${resp ? 'OK' : 'タイムアウト'}`,
+        resp ? 'log-ok' : 'log-warn',
+      );
+      if (resp) written++; else skipped++;
+    }
+
+    log(`✓ 適用完了 — 書き込み: ${written} / スキップ: ${skipped}`, 'log-ok');
+
+    const naItems = S.diffItems.filter(d => !d.canApply);
+    if (naItems.length > 0) {
+      log(`  適用不可 ${naItems.length} 件は「Restore Stock Settings」後に再フラッシュが必要です`, 'log-warn');
+    }
+
+    // 3. 状態リセット（GitHub 値が実機に適用されたため差分解消）
+    if (written > 0) {
+      S.edits = {};
+      S.githubSaved = {};
+      S.diffItems = [];
+      S.layers.forEach(layer => {
+        layer.bindings = [...layer.originalBindings];
+        layer.dirty    = false;
+      });
+      document.getElementById('diff-panel').classList.add('hidden');
+      renderLayerTabs();
+      renderKeyboard();
+      updateChangeBadge();
+    }
+
+  } catch (err) {
+    log(`適用エラー: ${err.message}`, 'log-error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '⬇ GitHubを実機に適用';
+  }
+}
+
+document.getElementById('btn-apply-github-to-device').addEventListener('click', applyGithubToDevice);
+
+document.getElementById('btn-apply-device-to-github').addEventListener('click', () => {
+  document.getElementById('diff-panel').classList.add('hidden');
+  log('実機→GitHub 反映: 「保存 (GitHub + 実機)」ボタンを押して実行してください', 'log-info');
+});
+
+document.getElementById('btn-diff-dismiss').addEventListener('click', () => {
+  document.getElementById('diff-panel').classList.add('hidden');
+});
 
 // ─────────────────────────────────────────────
 // 実機書き込みのみ（GitHub プッシュなし）
