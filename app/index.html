@@ -1585,6 +1585,16 @@ document.getElementById('btn-save').addEventListener('click', async () => {
       const newContent = reconstructKeymap(S.keymapRaw, S.layers);
 
       log('GitHub にプッシュ中...', 'log-info');
+
+      // SHA 競合チェック：push 前に最新 SHA を再取得し、差異があれば中止
+      const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
+      if (latestSha !== S.keymapSha) {
+        log('⚠ GitHub上でファイルが変更されています — 保存を中止しました', 'log-warn');
+        log('  「リロード」ボタンでGitHubの最新内容を再読み込みし、編集をやり直してください', 'log-warn');
+        log('  ※現在の編集内容はまだ保持されています', 'log-info');
+        return;
+      }
+
       const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
       const commitMsg = `keymap: update ${changed} via zmk-keymap-sync`;
       const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, commitMsg);
@@ -2589,6 +2599,14 @@ document.getElementById('kb-modal-save').addEventListener('click', () => {
   }
   // PAT 未設定の場合はモーダルが表示されたまま
 })();
+
+// 未保存編集がある間は離脱を警告する
+window.addEventListener('beforeunload', (e) => {
+  if (Object.keys(S.edits).length > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 </script>
 </body>
 </html>
