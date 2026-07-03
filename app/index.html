@@ -7,26 +7,26 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #1a1a2e; --surface: #16213e; --border: #2d2d5e;
-      --text: #e0e0e0; --muted: #9ca3af; --accent: #7c3aed; --accent-h: #6d28d9;
-      --green: #10b981; --yellow: #f59e0b; --red: #ef4444;
-      --key-bg: #0f172a; --key-border: #334155; --key-hover: #1e293b; --key-mod: #1c1954;
+      --bg: #f0f4f9; --surface: #ffffff; --border: #dce3ed;
+      --text: #1e293b; --muted: #64748b; --accent: #6d28d9; --accent-h: #5b21b6;
+      --green: #059669; --yellow: #b45309; --red: #dc2626;
+      --key-bg: #f8fafc; --key-border: #c8d3e0; --key-hover: #e8eef6; --key-mod: #ede9fe;
     }
     body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
     .hidden { display: none !important; }
 
     /* Header */
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 14px; }
-    header h1 { font-size: 1.05rem; color: #a78bfa; font-weight: 700; white-space: nowrap; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    header h1 { font-size: 1.05rem; color: var(--accent); font-weight: 700; white-space: nowrap; }
     .hdr-statuses { display: flex; gap: 14px; align-items: center; flex: 1; }
     .status-item { display: flex; align-items: center; gap: 5px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot-gray { background: #6b7280; } .dot-green { background: var(--green); }
+    .dot-gray { background: #94a3b8; } .dot-green { background: var(--green); }
     .dot-red { background: var(--red); } .dot-yellow { background: var(--yellow); }
     .status-label { font-size: 0.76rem; color: var(--muted); }
 
     /* Buttons */
-    button { padding: 6px 13px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: opacity 0.15s; }
+    button { padding: 6px 13px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.15s; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
@@ -35,22 +35,22 @@
     .btn-danger { background: #dc2626; color: #fff; }
     .btn-danger:hover:not(:disabled) { background: #b91c1c; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-    .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: #6b7280; }
+    .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: #94a3b8; background: var(--bg); }
 
     /* Main */
     main { flex: 1; display: flex; flex-direction: column; padding: 14px 20px; gap: 10px; }
 
     /* Layer tabs */
-    .layer-tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; flex-wrap: wrap; align-items: center; }
+    .layer-tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
     .layer-tabs-label { font-size: 0.72rem; color: var(--muted); margin-right: 4px; }
     .layer-tab { padding: 4px 11px; border-radius: 5px; cursor: pointer; font-size: 0.76rem; font-weight: 600; color: var(--muted); background: transparent; border: none; transition: all 0.12s; }
-    .layer-tab:hover { color: var(--text); background: var(--border); }
+    .layer-tab:hover { color: var(--text); background: var(--bg); }
     .layer-tab.active { background: var(--accent); color: #fff; }
     .layer-tab.dirty::after { content: ' •'; color: var(--yellow); }
 
     /* Keyboard card */
-    .keyboard-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; overflow-x: auto; }
-    .keyboard-canvas { position: relative; }
+    .keyboard-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; overflow-x: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; justify-content: center; }
+    .keyboard-canvas { position: relative; flex-shrink: 0; }
 
     /* Keys */
     .key {
@@ -58,57 +58,210 @@
       border-radius: 6px; cursor: pointer;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       text-align: center; overflow: hidden; user-select: none;
-      transition: background 0.1s, border-color 0.1s;
+      transition: background 0.1s, border-color 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
     }
     .key:hover { background: var(--key-hover); border-color: var(--accent); z-index: 2; }
-    .key.modified { background: var(--key-mod); border-color: #7c3aed88; }
-    .key-label { font-size: 0.62rem; white-space: pre-line; line-height: 1.3; padding: 2px; color: var(--text); }
-    .key-trans { color: #4b5563 !important; }
+    .key.modified { background: var(--key-mod); border-color: #a78bfa; }
+    .key-label { font-size: 0.72rem; white-space: pre-line; line-height: 1.3; padding: 3px; color: var(--text); }
+    .key-trans { color: #94a3b8 !important; }
 
     /* Action bar */
     .action-bar { display: flex; gap: 8px; align-items: center; }
     .spacer { flex: 1; }
-    .change-badge { font-size: 0.76rem; color: var(--yellow); }
+    .change-badge { font-size: 0.76rem; color: var(--yellow); font-weight: 600; }
 
     /* Log */
-    .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+    .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
     .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .log-header h3 { font-size: 0.78rem; color: var(--muted); }
-    .log-panel { background: #080816; border-radius: 5px; padding: 8px 10px; font-family: 'Consolas', monospace; font-size: 0.7rem; height: 120px; overflow-y: auto; line-height: 1.75; }
+    .log-panel { background: #0f1117; border-radius: 5px; padding: 8px 10px; font-family: 'Consolas', monospace; font-size: 0.7rem; height: 120px; overflow-y: auto; line-height: 1.75; }
     .log-info { color: #93c5fd; } .log-ok { color: #6ee7b7; }
     .log-warn { color: #fcd34d; } .log-error { color: #fca5a5; }
 
     /* Modals */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; width: 420px; max-width: 92vw; }
-    .modal-box h2 { font-size: 0.98rem; margin-bottom: 14px; color: #c4b5fd; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: flex-start; justify-content: center; z-index: 100; overflow-y: auto; padding: 20px 10px; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px 24px; width: 440px; max-width: 96vw; box-shadow: 0 10px 40px rgba(0,0,0,0.12); }
+    .modal-box h2 { font-size: 1rem; margin-bottom: 14px; color: var(--text); font-weight: 700; }
     .form-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; display: block; }
     input[type="password"], input[type="text"] {
-      width: 100%; background: #080816; border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); padding: 7px 11px; font-size: 0.83rem; margin-bottom: 10px;
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 7px; color: var(--text); padding: 7px 11px; font-size: 0.83rem; margin-bottom: 10px;
     }
-    input:focus { outline: none; border-color: var(--accent); }
+    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(109,40,217,0.1); }
     .hint { font-size: 0.72rem; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
-    .hint a { color: #a78bfa; }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+    .hint a { color: var(--accent); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+
+    /* ── キー編集モーダル ── */
+    .key-modal-inner { display: flex; gap: 0; }
+    .key-modal-left { flex: 1; min-width: 0; padding-right: 20px; }
+    .key-modal-right {
+      width: 230px; flex-shrink: 0; border-left: 1px solid var(--border);
+      padding-left: 20px; display: flex; flex-direction: column;
+    }
+
+    /* 説明パネル */
+    #beh-desc-panel { flex: 1; }
+    .beh-desc-empty { font-size: 0.76rem; color: var(--muted); line-height: 1.6; padding-top: 4px; }
+    .beh-desc-title { font-size: 0.95rem; font-weight: 700; color: var(--accent); margin-bottom: 8px; font-family: Consolas, monospace; }
+    .beh-desc-body { font-size: 0.76rem; color: var(--text); line-height: 1.7; margin-bottom: 10px; white-space: pre-line; }
+    .beh-desc-example {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+      padding: 8px 11px; font-family: Consolas, monospace; font-size: 0.72rem;
+      color: var(--accent); white-space: pre-line; line-height: 1.8; margin-bottom: 8px;
+    }
+    .beh-desc-badge {
+      display: inline-block; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px;
+      font-weight: 600;
+    }
+    .badge-rpc  { background: #dcfce7; color: #15803d; }
+    .badge-gh   { background: #fef9c3; color: #92400e; }
+
+    /* ビヘイビアセレクター */
+    .beh-selector { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+    .beh-btn {
+      padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--muted); cursor: pointer; font-size: 0.78rem;
+      font-family: Consolas, monospace; transition: all 0.15s;
+    }
+    .beh-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .beh-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .section-label { font-size: 0.72rem; color: var(--muted); margin: 8px 0 5px; display: flex; align-items: center; gap: 6px; }
+    .section-label .val-chip {
+      font-family: Consolas, monospace; font-size: 0.78rem;
+      background: #ede9fe; color: var(--accent); padding: 1px 8px; border-radius: 10px;
+    }
+
+    .opt-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .opt-btn {
+      padding: 3px 9px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.75rem;
+      transition: all 0.12s;
+    }
+    .opt-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .opt-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ミニキーボード */
+    .kbd-wrap { border: 1px solid var(--border); border-radius: 8px; padding: 7px; background: var(--bg); margin-bottom: 8px; overflow-x: auto; }
+    .kbd-row { display: flex; gap: 2px; margin-bottom: 2px; }
+    .kbd-key {
+      flex: 1 0 0; height: 26px; min-width: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text);
+      cursor: pointer; font-size: 0.58rem; white-space: nowrap; overflow: hidden;
+      transition: all 0.1s; user-select: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .kbd-key:hover { background: #ede9fe; border-color: var(--accent); color: var(--accent); }
+    .kbd-key.k-active { background: var(--accent); border-color: var(--accent-h); color: #fff; box-shadow: none; }
+    .kbd-key[data-w="1.5"]  { flex: 1.5 0 0; }
+    .kbd-key[data-w="1.75"] { flex: 1.75 0 0; }
+    .kbd-key[data-w="2"]    { flex: 2 0 0; }
+    .kbd-key[data-w="2.25"] { flex: 2.25 0 0; }
+    .kbd-key[data-w="2.75"] { flex: 2.75 0 0; }
+    .kbd-key[data-w="6.25"] { flex: 6.25 0 0; }
+
+    /* プレビュー兼直接入力 */
+    .binding-preview-wrap { margin-top: 10px; }
+    .binding-preview-wrap label { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; display: block; }
+    .binding-preview-wrap input {
+      font-family: Consolas, monospace; color: var(--accent); font-weight: 700;
+      background: var(--bg); font-size: 0.88rem; margin-bottom: 0;
+    }
+
+    /* GitHub風リポジトリ表示 */
+    .repo-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.82rem; color: var(--text); font-weight: 500;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px 10px; text-decoration: none;
+      white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .repo-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .repo-chip .repo-sep { color: var(--muted); font-weight: 300; }
+
+    /* キーボード切替ドロップダウン */
+    .kb-switcher { position: relative; }
+    .kb-switcher-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 4px 10px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+      color: var(--text); white-space: nowrap;
+    }
+    .kb-switcher-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .kb-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+      z-index: 200; overflow: hidden;
+    }
+    .kb-dropdown.hidden { display: none; }
+    .kb-item {
+      display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+      cursor: pointer; font-size: 0.82rem; color: var(--text); border-bottom: 1px solid var(--border);
+    }
+    .kb-item:last-child { border-bottom: none; }
+    .kb-item:hover { background: var(--bg); }
+    .kb-item.active { background: #ede9fe; color: var(--accent); font-weight: 600; }
+    .kb-item-add { color: var(--accent); }
+
+    /* コンボエディタ */
+    .combo-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; max-height: 300px; overflow-y: auto; }
+    .combo-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6px; align-items: center;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    }
+    .combo-row label { font-size: 0.7rem; color: var(--muted); margin-bottom: 2px; display: block; }
+    .combo-row input { margin-bottom: 0; font-size: 0.78rem; padding: 4px 8px; }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── キー編集モーダル 20%拡大 ── */
+    #key-modal .modal-box         { padding: 24px 26px; }
+    #key-modal .modal-box h2      { font-size: 1.2rem; margin-bottom: 17px; }
+    #key-modal .form-label        { font-size: 0.94rem; }
+    #key-modal .beh-btn           { padding: 5px 14px; font-size: 0.94rem; }
+    #key-modal .section-label     { font-size: 0.86rem; }
+    #key-modal .section-label .val-chip { font-size: 0.94rem; }
+    #key-modal .opt-btn           { padding: 4px 11px; font-size: 0.9rem; }
+    #key-modal .kbd-wrap          { padding: 9px; }
+    #key-modal .kbd-key           { height: 31px; font-size: 0.7rem; }
+    #key-modal .binding-preview-wrap label { font-size: 0.84rem; }
+    #key-modal .binding-preview-wrap input { font-size: 1.06rem; }
+    #key-modal .key-modal-right   { width: 276px; }
+    #key-modal .beh-desc-empty    { font-size: 0.91rem; }
+    #key-modal .beh-desc-title    { font-size: 1.14rem; margin-bottom: 10px; }
+    #key-modal .beh-desc-body     { font-size: 0.91rem; margin-bottom: 12px; }
+    #key-modal .beh-desc-example  { font-size: 0.86rem; padding: 10px 13px; }
+    #key-modal .beh-desc-badge    { font-size: 0.82rem; padding: 3px 10px; }
   </style>
 </head>
 <body>
 
 <!-- PAT設定モーダル -->
 <div class="modal-overlay" id="pat-modal">
-  <div class="modal-box">
+  <div class="modal-box" style="width:480px">
     <h2>GitHub 接続設定</h2>
+    <div id="pat-no-pat-hint" style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px 13px;margin-bottom:14px;font-size:0.78rem;line-height:1.6;color:#78350f;">
+      <strong>PAT（Personal Access Token）とは？</strong><br>
+      GitHub API を使ってキーマップファイルを読み書きするための認証トークンです。<br>
+      パスワードの代わりに使用します。<br><br>
+      <strong>取得方法：</strong><br>
+      1. GitHub にログイン<br>
+      2. 右上のアイコン → Settings → Developer settings<br>
+      3. Personal access tokens → Tokens (classic) → Generate new token<br>
+      4. 権限: <code style="background:#fff;padding:1px 4px;border-radius:3px;">repo</code> にチェック → Generate token<br>
+      5. 表示されたトークン（ghp_xxx...）をコピーして下に貼り付け
+    </div>
     <label class="form-label">Personal Access Token (PAT)</label>
     <input type="password" id="pat-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
     <p class="hint">
-      必要な権限: <strong>repo</strong>（読み書き）<br>
-      <a href="https://github.com/settings/tokens/new?scopes=repo&description=zmk-keymap-sync" target="_blank">
-        → GitHub でトークンを発行する
+      必要な権限: <strong>repo</strong>（読み書き）
+      <a href="https://github.com/settings/tokens/new?scopes=repo&description=zmk-keymap-sync" target="_blank" style="display:block;margin-top:4px">
+        → GitHub でトークンを発行する（ブラウザで開く）
       </a>
     </p>
     <div class="modal-actions">
@@ -118,34 +271,134 @@
   </div>
 </div>
 
+<!-- キーボード追加・編集モーダル -->
+<div class="modal-overlay hidden" id="kb-modal">
+  <div class="modal-box" style="width:480px">
+    <h2 id="kb-modal-title">キーボードを追加</h2>
+
+    <label class="form-label">GitHub リポジトリ URL</label>
+    <div style="display:flex;gap:6px;margin-bottom:4px">
+      <input type="text" id="kb-repo-url" placeholder="https://github.com/owner/repo" style="margin-bottom:0;flex:1">
+      <button class="btn-ghost" id="kb-detect-btn" style="white-space:nowrap;flex-shrink:0;font-size:0.78rem">🔍 自動検出</button>
+    </div>
+    <div id="kb-detect-status" style="font-size:0.74rem;min-height:1.2em;margin-bottom:10px"></div>
+
+    <label class="form-label">キーボード名（表示用）</label>
+    <input type="text" id="kb-label" placeholder="例: roBa">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>
+        <label class="form-label">オーナー</label>
+        <input type="text" id="kb-owner" placeholder="例: Badgio0906">
+      </div>
+      <div>
+        <label class="form-label">リポジトリ名</label>
+        <input type="text" id="kb-repo" placeholder="例: zmk-config-roBa">
+      </div>
+    </div>
+    <label class="form-label">ブランチ</label>
+    <input type="text" id="kb-branch" placeholder="main">
+    <label class="form-label">keymap ファイルパス</label>
+    <input type="text" id="kb-keymap-path" placeholder="例: config/roBa.keymap">
+    <label class="form-label">レイアウト JSON パス</label>
+    <input type="text" id="kb-layout-path" placeholder="例: config/roBa.json">
+    <div class="modal-actions">
+      <button class="btn-ghost" id="kb-modal-cancel">キャンセル</button>
+      <button class="btn-danger hidden" id="kb-modal-delete">削除</button>
+      <button class="btn-primary" id="kb-modal-save">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- キー編集モーダル -->
 <div class="modal-overlay hidden" id="key-modal">
-  <div class="modal-box" style="width:370px">
-    <h2>キーバインディング変更</h2>
-    <p class="hint" id="key-modal-current" style="font-family:Consolas; margin-bottom:12px;"></p>
-    <label class="form-label">新しいバインディング</label>
-    <input type="text" id="key-modal-input" placeholder="例: &kp A  /  &lt 1 SPACE  /  &trans">
-    <p class="hint">ZMK バインディング構文（<code>&amp;</code> から始まる形式）で入力してください</p>
+  <div class="modal-box" style="width:1080px;max-width:98vw;padding:20px 22px;">
+    <h2>キーバインディング変更
+      <span id="key-modal-current" style="font-family:Consolas;font-size:0.8rem;color:var(--muted);font-weight:normal;"></span>
+    </h2>
+
+    <div class="key-modal-inner">
+      <!-- 左: 操作UI -->
+      <div class="key-modal-left">
+        <label class="form-label">ビヘイビア</label>
+        <div class="beh-selector" id="beh-selector">
+          <button class="beh-btn" data-beh="kp">&amp;kp</button>
+          <button class="beh-btn" data-beh="lt">&amp;lt</button>
+          <button class="beh-btn" data-beh="mt">&amp;mt</button>
+          <button class="beh-btn" data-beh="none">&amp;none</button>
+          <button class="beh-btn" data-beh="trans">&amp;trans</button>
+          <button class="beh-btn" data-beh="mkp">&amp;mkp</button>
+          <button class="beh-btn" data-beh="bt">&amp;bt</button>
+          <button class="beh-btn" data-beh="bootloader">&amp;bootloader</button>
+        </div>
+        <div id="beh-params-container"></div>
+        <div class="binding-preview-wrap">
+          <label>プレビュー（直接編集も可）</label>
+          <input type="text" id="key-modal-input" spellcheck="false">
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="key-modal-cancel">キャンセル</button>
+          <button class="btn-primary" id="key-modal-ok">適用</button>
+        </div>
+      </div>
+
+      <!-- 右: ビヘイビア説明パネル -->
+      <div class="key-modal-right">
+        <div id="beh-desc-panel">
+          <p class="beh-desc-empty">ビヘイビアを選択すると<br>説明が表示されます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- コンボエディタモーダル -->
+<div class="modal-overlay hidden" id="combo-modal">
+  <div class="modal-box" style="width:700px;max-width:98vw;">
+    <h2>コンボ編集
+      <span style="font-size:0.72rem;color:var(--muted);font-weight:normal;margin-left:8px;">GitHub push のみ（実機即時書き込みは未対応）</span>
+    </h2>
+    <div class="combo-list" id="combo-list"></div>
+    <button class="btn-ghost" id="btn-combo-add" style="font-size:0.78rem;">＋ コンボを追加</button>
     <div class="modal-actions">
-      <button class="btn-ghost" id="key-modal-cancel">キャンセル</button>
-      <button class="btn-primary" id="key-modal-ok">適用</button>
+      <button class="btn-ghost" id="combo-modal-cancel">キャンセル</button>
+      <button class="btn-primary" id="combo-modal-ok">keymap に反映</button>
     </div>
   </div>
 </div>
 
 <!-- ヘッダー -->
 <header>
-  <h1>ZMK Keymap Sync</h1>
-  <div class="hdr-statuses">
-    <div class="status-item">
-      <span class="dot dot-gray" id="gh-dot"></span>
-      <span class="status-label" id="gh-status">GitHub 未接続</span>
-    </div>
-    <div class="status-item">
-      <span class="dot dot-gray" id="dev-dot"></span>
-      <span class="status-label" id="dev-status">デバイス 未接続</span>
+  <h1 style="font-size:0.95rem;white-space:nowrap;">ZMK Keymap Sync</h1>
+
+  <!-- キーボード切替 -->
+  <div class="kb-switcher" id="kb-switcher">
+    <button class="kb-switcher-btn" id="kb-switcher-btn">
+      <span id="kb-current-name">キーボード選択</span>
+      <span style="font-size:0.65rem;color:var(--muted);">▼</span>
+    </button>
+    <div class="kb-dropdown hidden" id="kb-dropdown">
+      <div id="kb-dropdown-list"></div>
+      <div class="kb-item kb-item-add" id="kb-add-item">＋ キーボードを追加</div>
     </div>
   </div>
+
+  <!-- GitHub リポジトリ表示 -->
+  <a class="repo-chip hidden" id="repo-chip" href="#" target="_blank">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0;color:#1f2328">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+    <span id="repo-chip-text"></span>
+  </a>
+
+  <div style="flex:1"></div>
+
+  <!-- デバイス接続状態 -->
+  <div class="status-item">
+    <span class="dot dot-gray" id="dev-dot"></span>
+    <span class="status-label" id="dev-status">デバイス 未接続</span>
+  </div>
+
+  <!-- PAT / 接続 / 切断ボタン -->
   <button class="btn-ghost" id="btn-settings" style="font-size:0.73rem">⚙ PAT設定</button>
   <button class="btn-ghost" id="btn-serial" style="font-size:0.73rem">⚡ USB 接続</button>
   <button class="btn-danger hidden" id="btn-disconnect" style="font-size:0.73rem">切断</button>
@@ -169,7 +422,11 @@
 
   <!-- アクションバー -->
   <div class="action-bar">
-    <button class="btn-ghost" id="btn-reload" style="font-size:0.75rem">↻ 再読み込み</button>
+    <span style="font-size:0.72rem;color:var(--muted);margin-right:2px">読み込み元:</span>
+    <button class="btn-ghost" id="btn-reload" style="font-size:0.75rem">↻ GitHub</button>
+    <button class="btn-ghost hidden" id="btn-read-device" style="font-size:0.75rem">📥 実機</button>
+    <div style="width:1px;height:18px;background:var(--border);margin:0 4px"></div>
+    <button class="btn-ghost hidden" id="btn-combo" style="font-size:0.75rem">🔗 コンボ編集</button>
     <button class="btn-ghost hidden" id="btn-write-device" style="font-size:0.75rem">⚡ 実機に書き込み</button>
     <div class="spacer"></div>
     <span class="change-badge hidden" id="change-badge"></span>
@@ -190,27 +447,48 @@
 'use strict';
 
 // ─────────────────────────────────────────────
-// 定数
+// 定数・キーボード設定
 // ─────────────────────────────────────────────
-const OWNER        = 'Badgio0906';
-const REPO         = 'zmk-config-roBa';
-const KEYMAP_PATH  = 'config/roBa.keymap';
-const LAYOUT_PATH  = 'config/roBa.json';
-const BRANCH       = 'main';
-const KEY_SCALE    = 60;  // px per 1U
-const KEY_GAP      = 4;   // px
+const KEY_SCALE = 72;  // px per 1U
+const KEY_GAP   = 4;   // px
 
+const DEFAULT_KEYBOARDS = [
+  {
+    id: 'roba', label: 'roBa',
+    owner: 'Badgio0906', repo: 'zmk-config-roBa', branch: 'main',
+    keymapPath: 'config/roBa.keymap', layoutPath: 'config/roBa.json',
+  },
+];
+
+function getKeyboards() {
+  try { return JSON.parse(localStorage.getItem('zmk_keyboards') || 'null') || DEFAULT_KEYBOARDS; }
+  catch { return DEFAULT_KEYBOARDS; }
+}
+function saveKeyboards(kbs) { localStorage.setItem('zmk_keyboards', JSON.stringify(kbs)); }
+
+// アクティブキーボード ID
+function getActiveKbId() { return localStorage.getItem('zmk_active_kb') || DEFAULT_KEYBOARDS[0].id; }
+function setActiveKbId(id) { localStorage.setItem('zmk_active_kb', id); }
+
+function getActiveKb() {
+  const kbs = getKeyboards();
+  return kbs.find(k => k.id === getActiveKbId()) || kbs[0];
+}
+
+// 後方互換: 旧定数の代わりに S.kb を使う
 // ─────────────────────────────────────────────
 // 状態
 // ─────────────────────────────────────────────
 const S = {
   pat:          localStorage.getItem('zmk_pat') || '',
-  layoutKeys:   [],   // roBa.json の layout 配列
-  layers:       [],   // [{name, bindings[], originalBindings[], dirty}]
+  kb:           getActiveKb(),   // 現在選択中のキーボード設定
+  layoutKeys:   [],
+  layers:       [],
   keymapRaw:    null,
   keymapSha:    null,
   currentLayer: 0,
-  edits:        {},   // 'layerIdx:keyIdx' → newBinding
+  edits:        {},        // 未 GitHub push の変更
+  githubSaved:  {},        // GitHub push 済み・実機未書き込みの変更
   transport:    null,
 };
 
@@ -247,7 +525,8 @@ async function ghFetch(path, opts = {}) {
 }
 
 async function ghGetFile(path) {
-  const data    = await ghFetch(`/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`);
+  const { owner, repo, branch } = S.kb;
+  const data    = await ghFetch(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`);
   const content = atob(data.content.replace(/\s/g, ''));
   return { content, sha: data.sha };
 }
@@ -256,9 +535,10 @@ async function ghPutFile(path, content, sha, message) {
   // UTF-8 対応の base64 エンコード
   const b64 = btoa(encodeURIComponent(content).replace(/%([0-9A-F]{2})/g,
     (_, p) => String.fromCharCode(parseInt(p, 16))));
-  return ghFetch(`/repos/${OWNER}/${REPO}/contents/${path}`, {
+  const { owner, repo, branch } = S.kb;
+  return ghFetch(`/repos/${owner}/${repo}/contents/${path}`, {
     method: 'PUT',
-    body: JSON.stringify({ message, content: b64, sha, branch: BRANCH }),
+    body: JSON.stringify({ message, content: b64, sha, branch }),
   });
 }
 
@@ -491,21 +771,302 @@ function renderLayerTabs() {
 // ─────────────────────────────────────────────
 // キー編集モーダル
 // ─────────────────────────────────────────────
+
+// ビジュアルキーボードのレイアウト定義
+const KBD_LAYOUT = [
+  // ファンクション行
+  [{k:'ESC'},{k:'F1'},{k:'F2'},{k:'F3'},{k:'F4'},{k:'F5'},{k:'F6'},
+   {k:'F7'},{k:'F8'},{k:'F9'},{k:'F10'},{k:'F11'},{k:'F12'}],
+  // 数字行
+  [{k:'GRAVE',l:'`'},{k:'N1',l:'1'},{k:'N2',l:'2'},{k:'N3',l:'3'},{k:'N4',l:'4'},
+   {k:'N5',l:'5'},{k:'N6',l:'6'},{k:'N7',l:'7'},{k:'N8',l:'8'},{k:'N9',l:'9'},
+   {k:'N0',l:'0'},{k:'MINUS',l:'-'},{k:'EQUAL',l:'='},{k:'BSPC',l:'⌫',w:'1.5'}],
+  // QWERTY 行
+  [{k:'TAB',w:'1.5'},{k:'Q'},{k:'W'},{k:'E'},{k:'R'},{k:'T'},{k:'Y'},{k:'U'},
+   {k:'I'},{k:'O'},{k:'P'},{k:'LBKT',l:'['},{k:'RBKT',l:']'},{k:'BSLH',l:'\\',w:'1.5'}],
+  // ホーム行
+  [{k:'A'},{k:'S'},{k:'D'},{k:'F'},{k:'G'},{k:'H'},{k:'J'},{k:'K'},{k:'L'},
+   {k:'SEMI',l:';'},{k:'SQT',l:"'"},{k:'ENTER',l:'↵',w:'2.25'}],
+  // シフト行
+  [{k:'LSHFT',l:'⇧L',w:'2.25'},{k:'Z'},{k:'X'},{k:'C'},{k:'V'},{k:'B'},
+   {k:'N'},{k:'M'},{k:'COMMA',l:','},{k:'DOT',l:'.'},{k:'FSLH',l:'/'},{k:'RSHFT',l:'⇧R',w:'1.75'}],
+  // 修飾キー行
+  [{k:'LCTRL',l:'⌃L',w:'1.5'},{k:'LGUI',l:'⊞L',w:'1.25'},{k:'LALT',l:'⌥L',w:'1.25'},
+   {k:'SPACE',l:'SPACE',w:'6.25'},
+   {k:'RALT',l:'⌥R',w:'1.25'},{k:'RGUI',l:'⊞R',w:'1.25'},{k:'RCTRL',l:'⌃R',w:'1.5'}],
+  // ナビ・矢印行
+  [{k:'DEL'},{k:'HOME'},{k:'END'},{k:'PG_UP',l:'PgU'},{k:'PG_DN',l:'PgD'},
+   {k:'LEFT',l:'←'},{k:'DOWN',l:'↓'},{k:'UP',l:'↑'},{k:'RIGHT',l:'→'}],
+];
+
+// モーダル内部状態
+const M = { beh:null, kpKey:null, ltLayer:null, ltKey:null,
+            mtMod:null, mtKey:null, mkpBtn:null, btAction:null, btIdx:0 };
+
 let editingKeyIdx = null;
+
+// キーボード HTML を生成
+function buildKbdHTML(fieldTag, activeKey) {
+  let h = `<div class="kbd-wrap">`;
+  for (const row of KBD_LAYOUT) {
+    h += `<div class="kbd-row">`;
+    for (const key of row) {
+      const lbl = key.l ?? key.k;
+      const w = key.w ? ` data-w="${key.w}"` : '';
+      const act = activeKey === key.k ? ' k-active' : '';
+      h += `<div class="kbd-key${act}"${w} data-field="${fieldTag}" data-key="${key.k}" title="${key.k}">${lbl}</div>`;
+    }
+    h += `</div>`;
+  }
+  return h + `</div>`;
+}
+
+// 現在の選択値を chip 表示するラベルを生成
+function chipLabel(title, val) {
+  const chip = val ? `<span class="val-chip">${val}</span>` : '';
+  return `<div class="section-label">${title}${chip}</div>`;
+}
+
+// ビヘイビアに応じたパラメータUIを描画
+function renderBehParams() {
+  const c = document.getElementById('beh-params-container');
+  const beh = M.beh;
+  let h = '';
+
+  if (beh === 'kp') {
+    h = chipLabel('キー', M.kpKey) + buildKbdHTML('kp', M.kpKey);
+
+  } else if (beh === 'lt') {
+    h = chipLabel('レイヤー（hold）', M.ltLayer !== null ? String(M.ltLayer) : null);
+    h += `<div class="opt-btns">`;
+    S.layers.forEach((l, i) => {
+      h += `<button class="opt-btn${M.ltLayer===i?' active':''}" data-lt-layer="${i}">${i}: ${l.name}</button>`;
+    });
+    h += `</div>`;
+    h += chipLabel('タップキー', M.ltKey) + buildKbdHTML('lt', M.ltKey);
+
+  } else if (beh === 'mt') {
+    const MODS = [
+      {k:'LSHFT',l:'L-Shift'},{k:'RSHFT',l:'R-Shift'},
+      {k:'LCTRL',l:'L-Ctrl'},{k:'RCTRL',l:'R-Ctrl'},
+      {k:'LALT',l:'L-Alt'},{k:'RALT',l:'R-Alt'},
+      {k:'LGUI',l:'L-GUI'},{k:'RGUI',l:'R-GUI'},
+    ];
+    h = chipLabel('モディファイア（hold）', M.mtMod);
+    h += `<div class="opt-btns">`;
+    MODS.forEach(m => {
+      h += `<button class="opt-btn${M.mtMod===m.k?' active':''}" data-mt-mod="${m.k}">${m.l}</button>`;
+    });
+    h += `</div>`;
+    h += chipLabel('タップキー', M.mtKey) + buildKbdHTML('mt', M.mtKey);
+
+  } else if (beh === 'mkp') {
+    const BTNS = [{k:'MB1',l:'左クリック'},{k:'MB2',l:'右クリック'},
+                  {k:'MB3',l:'中クリック'},{k:'MB4',l:'MB4'},{k:'MB5',l:'MB5'}];
+    h = chipLabel('マウスボタン', M.mkpBtn);
+    h += `<div class="opt-btns">`;
+    BTNS.forEach(b => {
+      h += `<button class="opt-btn${M.mkpBtn===b.k?' active':''}" data-mkp="${b.k}">${b.l}</button>`;
+    });
+    h += `</div>`;
+
+  } else if (beh === 'bt') {
+    const ACTS = [
+      {k:'BT_SEL',l:'プロファイル選択'},
+      {k:'BT_NXT',l:'次のプロファイル'},
+      {k:'BT_PRV',l:'前のプロファイル'},
+      {k:'BT_CLR',l:'ペアリング解除'},
+      {k:'BT_CLR_ALL',l:'全解除'},
+    ];
+    h = chipLabel('アクション', M.btAction);
+    h += `<div class="opt-btns">`;
+    ACTS.forEach(a => {
+      h += `<button class="opt-btn${M.btAction===a.k?' active':''}" data-bt-action="${a.k}">${a.l}</button>`;
+    });
+    h += `</div>`;
+    if (M.btAction === 'BT_SEL') {
+      h += chipLabel('プロファイル番号', String(M.btIdx));
+      h += `<div class="opt-btns">`;
+      [0,1,2,3,4].forEach(i => {
+        h += `<button class="opt-btn${M.btIdx===i?' active':''}" data-bt-idx="${i}">${i}</button>`;
+      });
+      h += `</div>`;
+    }
+
+  } else if (['none','trans','bootloader'].includes(beh)) {
+    h = `<p style="font-size:0.78rem;color:var(--muted);margin:8px 0">パラメータなし</p>`;
+  }
+
+  c.innerHTML = h;
+
+  // イベントデリゲーション
+  c.querySelectorAll('.kbd-key').forEach(el => el.addEventListener('click', () => {
+    const {field, key} = el.dataset;
+    if (field === 'kp') M.kpKey = key;
+    else if (field === 'lt') M.ltKey = key;
+    else if (field === 'mt') M.mtKey = key;
+    syncModalUI();
+  }));
+  c.querySelectorAll('[data-lt-layer]').forEach(el => el.addEventListener('click', () => {
+    M.ltLayer = parseInt(el.dataset.ltLayer); syncModalUI();
+  }));
+  c.querySelectorAll('[data-mt-mod]').forEach(el => el.addEventListener('click', () => {
+    M.mtMod = el.dataset.mtMod; syncModalUI();
+  }));
+  c.querySelectorAll('[data-mkp]').forEach(el => el.addEventListener('click', () => {
+    M.mkpBtn = el.dataset.mkp; syncModalUI();
+  }));
+  c.querySelectorAll('[data-bt-action]').forEach(el => el.addEventListener('click', () => {
+    M.btAction = el.dataset.btAction;
+    if (M.btAction !== 'BT_SEL') M.btIdx = 0;
+    syncModalUI();
+  }));
+  c.querySelectorAll('[data-bt-idx]').forEach(el => el.addEventListener('click', () => {
+    M.btIdx = parseInt(el.dataset.btIdx); syncModalUI();
+  }));
+}
+
+// ビヘイビアごとの説明
+const BEH_DESC = {
+  kp: {
+    title: '&kp — Key Press',
+    body: 'キーを押している間、指定したキーコードを送信します。\n最も基本的なビヘイビアです。',
+    example: '&kp A       → A キー\n&kp SPACE   → スペース\n&kp LSHFT   → 左 Shift\n&kp F1      → F1 キー',
+    rpc: true,
+  },
+  lt: {
+    title: '&lt — Layer Tap',
+    body: 'タップ（短押し）→ 指定キーを送信\nホールド（長押し）→ 指定レイヤーをアクティブ化\n\nホールドタップの一種です。',
+    example: '&lt 1 SPACE\n→ タップでスペース\n→ ホールドでレイヤー 1',
+    rpc: true,
+  },
+  mt: {
+    title: '&mt — Mod Tap',
+    body: 'タップ（短押し）→ 指定キーを送信\nホールド（長押し）→ 指定モディファイアを有効化\n\nホームロウモッドなどに使います。',
+    example: '&mt LSHFT A\n→ タップで A\n→ ホールドで左 Shift\n\n&mt LCTRL SPACE\n→ タップでスペース\n→ ホールドで左 Ctrl',
+    rpc: true,
+  },
+  none: {
+    title: '&none — No Operation',
+    body: 'このキーを完全に無効化します。\n押しても何も送信されません。',
+    example: '&none',
+    rpc: true,
+  },
+  trans: {
+    title: '&trans — Transparent',
+    body: '下位レイヤーのバインディングをそのまま使用します。\nレイヤー切り替え中も特定のキーを下のレイヤーと同じ動作にしたい場合に使います。',
+    example: '&trans',
+    rpc: true,
+  },
+  mkp: {
+    title: '&mkp — Mouse Button',
+    body: 'マウスボタンのクリックを送信します。\nZMK のマウスキー機能が有効な場合に使用できます。',
+    example: '&mkp MB1  → 左クリック\n&mkp MB2  → 右クリック\n&mkp MB3  → 中クリック',
+    rpc: true,
+  },
+  bt: {
+    title: '&bt — Bluetooth',
+    body: 'Bluetooth 接続を制御します。\n複数デバイスとペアリングして切り替えることができます。',
+    example: '&bt BT_SEL 0  → プロファイル 0\n&bt BT_NXT    → 次のプロファイル\n&bt BT_PRV    → 前のプロファイル\n&bt BT_CLR    → ペアリング解除',
+    rpc: true,
+  },
+  bootloader: {
+    title: '&bootloader',
+    body: 'キーボードをブートローダーモードに切り替えます。\nファームウェアの書き込み（flashing）に使用します。\n\n⚠ 押すとキーボードが一時的に使用不能になります。',
+    example: '&bootloader',
+    rpc: true,
+  },
+};
+
+// モーダル UI（params + preview input + 説明パネル）を同期
+function syncModalUI() {
+  renderBehParams();
+  const val = buildBindingFromModal();
+  document.getElementById('key-modal-input').value = val ?? '';
+
+  // 説明パネル更新
+  const panel = document.getElementById('beh-desc-panel');
+  const desc = BEH_DESC[M.beh];
+  if (!desc) {
+    panel.innerHTML = '<p class="beh-desc-empty">ビヘイビアを選択すると<br>説明が表示されます。</p>';
+    return;
+  }
+  const rpcBadge = desc.rpc
+    ? '<span class="beh-desc-badge badge-rpc">⚡ 実機書き込み対応</span>'
+    : '<span class="beh-desc-badge badge-gh">📦 GitHub push のみ</span>';
+  panel.innerHTML = `
+    <div class="beh-desc-title">${desc.title}</div>
+    <div class="beh-desc-body">${desc.body}</div>
+    <div class="beh-desc-example">${desc.example}</div>
+    ${rpcBadge}
+  `;
+}
+
+// モーダル状態 → バインディング文字列
+function buildBindingFromModal() {
+  switch (M.beh) {
+    case 'kp':         return M.kpKey ? `&kp ${M.kpKey}` : null;
+    case 'lt':         return (M.ltLayer !== null && M.ltKey) ? `&lt ${M.ltLayer} ${M.ltKey}` : null;
+    case 'mt':         return (M.mtMod && M.mtKey) ? `&mt ${M.mtMod} ${M.mtKey}` : null;
+    case 'none':       return '&none';
+    case 'trans':      return '&trans';
+    case 'bootloader': return '&bootloader';
+    case 'mkp':        return M.mkpBtn ? `&mkp ${M.mkpBtn}` : null;
+    case 'bt':
+      if (!M.btAction) return null;
+      return M.btAction === 'BT_SEL' ? `&bt BT_SEL ${M.btIdx}` : `&bt ${M.btAction}`;
+    default:           return null;
+  }
+}
+
+// 既存バインディング → モーダル状態に変換してプリセット
+function parseCurrentBinding(str) {
+  if (!str) return;
+  str = str.trim();
+  if (str === '&none')       { M.beh = 'none';       return; }
+  if (str === '&trans')      { M.beh = 'trans';       return; }
+  if (str === '&bootloader') { M.beh = 'bootloader';  return; }
+  const kpM = str.match(/^&kp\s+(\S+)$/);
+  if (kpM)  { M.beh = 'kp';  M.kpKey = kpM[1]; return; }
+  const ltM = str.match(/^&lt\s+(\d+)\s+(\S+)$/);
+  if (ltM)  { M.beh = 'lt';  M.ltLayer = parseInt(ltM[1]); M.ltKey = ltM[2]; return; }
+  const mtM = str.match(/^&mt\s+(\S+)\s+(\S+)$/);
+  if (mtM)  { M.beh = 'mt';  M.mtMod = mtM[1]; M.mtKey = mtM[2]; return; }
+  const mkpM = str.match(/^&mkp\s+(\S+)$/);
+  if (mkpM) { M.beh = 'mkp'; M.mkpBtn = mkpM[1]; return; }
+  const btM = str.match(/^&bt\s+(\S+)(?:\s+(\d+))?$/);
+  if (btM)  { M.beh = 'bt';  M.btAction = btM[1]; M.btIdx = btM[2] ? parseInt(btM[2]) : 0; return; }
+  // 未知の場合は &kp ベースとして開く
+  M.beh = 'kp';
+}
+
+// ビヘイビアボタンのクリック
+document.getElementById('beh-selector').addEventListener('click', e => {
+  const btn = e.target.closest('[data-beh]');
+  if (!btn) return;
+  M.beh = btn.dataset.beh;
+  M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = null;
+  M.btIdx = 0;
+  document.querySelectorAll('.beh-btn').forEach(b => b.classList.toggle('active', b.dataset.beh === M.beh));
+  syncModalUI();
+});
 
 function openKeyEdit(keyIdx, current) {
   editingKeyIdx = keyIdx;
-  document.getElementById('key-modal-current').textContent = `現在: ${current}`;
-  const inp = document.getElementById('key-modal-input');
-  inp.value = current;
+  document.getElementById('key-modal-current').textContent = `(現在: ${current})`;
+  // 状態リセット
+  M.beh = null; M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = null; M.btIdx = 0;
+  // 現在のバインディングをパースしてプリセット
+  parseCurrentBinding(current);
+  document.querySelectorAll('.beh-btn').forEach(b => b.classList.toggle('active', b.dataset.beh === M.beh));
+  document.getElementById('beh-params-container').innerHTML = '';
+  syncModalUI();
   document.getElementById('key-modal').classList.remove('hidden');
-  inp.select();
-  inp.focus();
 }
 
 document.getElementById('key-modal-cancel').addEventListener('click', closeKeyModal);
 document.getElementById('key-modal-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') applyKeyEdit();
+  if (e.key === 'Enter')  applyKeyEdit();
   if (e.key === 'Escape') closeKeyModal();
 });
 document.getElementById('key-modal-ok').addEventListener('click', applyKeyEdit);
@@ -516,6 +1077,7 @@ function closeKeyModal() {
 }
 
 function applyKeyEdit() {
+  // プレビュー入力欄の値を優先（直接入力も受け付ける）
   const newBinding = document.getElementById('key-modal-input').value.trim();
   if (!newBinding || editingKeyIdx === null) return;
 
@@ -538,18 +1100,32 @@ function applyKeyEdit() {
 }
 
 function updateChangeBadge() {
-  const count   = Object.keys(S.edits).length;
+  const editCount  = Object.keys(S.edits).length;
+  const savedCount = Object.keys(S.githubSaved).length;
   const badge   = document.getElementById('change-badge');
   const saveBtn = document.getElementById('btn-save');
 
-  if (count > 0) {
-    badge.textContent = `${count} 件の変更あり`;
+  if (editCount > 0) {
+    badge.textContent = `${editCount} 件の変更あり`;
+    badge.className = 'change-badge';
     badge.classList.remove('hidden');
-    saveBtn.classList.remove('hidden');
+    saveBtn.textContent = '💾 保存 (GitHub + 実機)';
+    saveBtn.className = 'btn-success';
+  } else if (savedCount > 0) {
+    badge.textContent = `GitHub 保存済 · 実機未書き込み (${savedCount} 件)`;
+    badge.className = 'change-badge';
+    badge.style.color = 'var(--accent)';
+    badge.classList.remove('hidden');
+    saveBtn.textContent = '⚡ 実機に書き込み';
+    saveBtn.className = 'btn-primary';
   } else {
     badge.classList.add('hidden');
-    saveBtn.classList.add('hidden');
+    saveBtn.textContent = '💾 保存 (GitHub + 実機)';
+    saveBtn.className = 'btn-success';
   }
+
+  // キーマップ読み込み済みなら常に表示
+  saveBtn.classList.toggle('hidden', S.layers.length === 0);
 }
 
 // ─────────────────────────────────────────────
@@ -590,7 +1166,22 @@ class FrameDecoder {
   }
 }
 
-async function serialRpc(packet, timeoutMs = 3000) {
+// レスポンスから requestId を抽出（ステール検出用）
+function parseResponseReqId(frame) {
+  const rf  = protoFields(frame);
+  const rrF = pGet(rf, 1);
+  if (!rrF?.value) return null;
+  const ridF = pGet(protoFields(rrF.value), 1);
+  return ridF ? ridF.value : null;
+}
+
+// セッション内で単調増加する RPC リクエスト ID（ステール応答の誤受理を防ぐ）
+function nextRpcReqId() {
+  if (!S._rpcSeq) S._rpcSeq = 1;
+  return S._rpcSeq++;
+}
+
+async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
   const { port } = S.transport;
   const writer   = port.writable.getWriter();
   const reader   = port.readable.getReader();
@@ -608,7 +1199,17 @@ async function serialRpc(packet, timeoutMs = 3000) {
       if (done) break;
       if (value === TIMEOUT) continue;
       const frames = decoder.push(value);
-      if (frames.length > 0) { reader.releaseLock(); return frames[0]; }
+      for (const frame of frames) {
+        if (expectedReqId !== null) {
+          const rid = parseResponseReqId(frame);
+          if (rid !== null && rid !== expectedReqId) {
+            log(`  stale frame: reqId=${rid} (expected ${expectedReqId}), skip`, 'log-warn');
+            continue;
+          }
+        }
+        reader.releaseLock();
+        return frame;
+      }
     }
     reader.releaseLock();
     return null;
@@ -665,6 +1266,7 @@ function decodeVarint(bytes, pos) {
 
 // bytes から {field, wire, value} の配列を返す
 // wire=0: value は number, wire=2: value は Uint8Array
+// wire=1/5: value は null（スキップのみ、値は返さない）
 function protoFields(bytes) {
   const out = [];
   let pos = 0;
@@ -684,8 +1286,16 @@ function protoFields(bytes) {
       pos = p2;
       out.push({ field, wire, value: bytes.slice(pos, pos + len) });
       pos += len;
+    } else if (wire === 1) {
+      // 64-bit固定長: 8バイトスキップ（ZMK将来拡張への耐性）
+      pos += 8;
+    } else if (wire === 5) {
+      // 32-bit固定長: 4バイトスキップ（ZMK将来拡張への耐性）
+      pos += 4;
     } else {
-      break; // wire 1/5 (64bit/32bit) は未対応、停止
+      // wire type 3/4（deprecated group）など想定外
+      log(`protobuf: 未知のwire type ${wire} (field ${field}) — デコードを中断します`, 'log-warn');
+      break;
     }
   }
   return out;
@@ -772,21 +1382,96 @@ function parseGetKeymapResponse(frame) {
   return map;
 }
 
-// &kp 用 HID キーコード
+// HID キーコード（&kp / &mt / &lt のキー指定で使用）
 const HID_KP = {
   A:4,B:5,C:6,D:7,E:8,F:9,G:10,H:11,I:12,J:13,K:14,L:15,M:16,
   N:17,O:18,P:19,Q:20,R:21,S:22,T:23,U:24,V:25,W:26,X:27,Y:28,Z:29,
   NUMBER_1:30,NUMBER_2:31,NUMBER_3:32,NUMBER_4:33,NUMBER_5:34,
   NUMBER_6:35,NUMBER_7:36,NUMBER_8:37,NUMBER_9:38,NUMBER_0:39,
   N1:30,N2:31,N3:32,N4:33,N5:34,N6:35,N7:36,N8:37,N9:38,N0:39,
-  ENTER:40,ESCAPE:41,BACKSPACE:42,TAB:43,SPACE:44,
-  MINUS:45,EQUAL:46,LEFT_BRACKET:47,RIGHT_BRACKET:48,
-  BACKSLASH:49,SEMICOLON:51,SINGLE_QUOTE:52,GRAVE:53,
-  COMMA:54,PERIOD:55,SLASH:56,
+  ENTER:40,ESCAPE:41,ESC:41,BACKSPACE:42,BSPC:42,TAB:43,SPACE:44,SPC:44,
+  MINUS:45,EQUAL:46,LEFT_BRACKET:47,LBKT:47,RIGHT_BRACKET:48,RBKT:48,
+  BACKSLASH:49,BSLH:49,SEMICOLON:51,SEMI:51,SINGLE_QUOTE:52,SQT:52,GRAVE:53,
+  COMMA:54,PERIOD:55,DOT:55,SLASH:56,FSLH:56,
   F1:58,F2:59,F3:60,F4:61,F5:62,F6:63,F7:64,F8:65,F9:66,F10:67,F11:68,F12:69,
-  DELETE:76,HOME:74,END:77,PAGE_UP:75,PAGE_DOWN:78,
+  DELETE:76,DEL:76,HOME:74,END:77,PAGE_UP:75,PG_UP:75,PAGE_DOWN:78,PG_DN:78,
+  RIGHT:79,LEFT:80,DOWN:81,UP:82,
   RIGHT_ARROW:79,LEFT_ARROW:80,DOWN_ARROW:81,UP_ARROW:82,
+  // Modifiers（&mt の hold パラメータなどで使用）
+  LCTRL:0xE0,LEFT_CONTROL:0xE0,LCTL:0xE0,
+  LSHFT:0xE1,LSHIFT:0xE1,LEFT_SHIFT:0xE1,
+  LALT:0xE2,LEFT_ALT:0xE2,
+  LGUI:0xE3,LEFT_GUI:0xE3,LWIN:0xE3,LCMD:0xE3,
+  RCTRL:0xE4,RIGHT_CONTROL:0xE4,RCTL:0xE4,
+  RSHFT:0xE5,RSHIFT:0xE5,RIGHT_SHIFT:0xE5,
+  RALT:0xE6,RIGHT_ALT:0xE6,
+  RGUI:0xE7,RIGHT_GUI:0xE7,RWIN:0xE7,RCMD:0xE7,
 };
+
+// ZMK キーコードトークン（LC(X) などのネスト修飾子を含む）→ HID param 値
+function parseZmkKeycode(token) {
+  const MOD_BITS = { LC:0x01, LS:0x02, LA:0x04, LG:0x08, RC:0x10, RS:0x20, RA:0x40, RG:0x80 };
+  let modMask = 0, t = token, m;
+  while ((m = t.match(/^([LR][CAGS])\((.+)\)$/))) {
+    const bit = MOD_BITS[m[1]];
+    if (!bit) break;
+    modMask |= bit;
+    t = m[2];
+  }
+  const code = HID_KP[t];
+  if (code === undefined) return null;
+  return (0x07 << 16) | (modMask << 8) | (code & 0xFF);
+}
+
+// バインディング文字列 → { beh, p1, p2 } に変換（RPC 送信用）
+// 対応: &kp &lt &mt &none &trans &bootloader &mkp &bt
+function parseBindingForRpc(str) {
+  str = str.trim().replace(/\s+/g, ' ');
+
+  if (str === '&none')       return { beh: 'none',       p1: 0, p2: 0 };
+  if (str === '&trans')      return { beh: 'trans',      p1: 0, p2: 0 };
+  if (str === '&bootloader') return { beh: 'bootloader', p1: 0, p2: 0 };
+
+  const kpM = str.match(/^&kp\s+(\S+)$/);
+  if (kpM) {
+    const p1 = parseZmkKeycode(kpM[1]);
+    if (p1 === null) return null;
+    return { beh: 'kp', p1, p2: 0 };
+  }
+
+  const ltM = str.match(/^&lt\s+(\d+)\s+(\S+)$/);
+  if (ltM) {
+    const p2 = parseZmkKeycode(ltM[2]);
+    if (p2 === null) return null;
+    return { beh: 'lt', p1: parseInt(ltM[1]), p2 };
+  }
+
+  const mtM = str.match(/^&mt\s+(\S+)\s+(\S+)$/);
+  if (mtM) {
+    const p1 = parseZmkKeycode(mtM[1]);
+    const p2 = parseZmkKeycode(mtM[2]);
+    if (p1 === null || p2 === null) return null;
+    return { beh: 'mt', p1, p2 };
+  }
+
+  const mkpM = str.match(/^&mkp\s+(\S+)$/);
+  if (mkpM) {
+    const MOUSE = { MB1:1,BTN1:1, MB2:2,BTN2:2, MB3:4,BTN3:4, MB4:8,BTN4:8, MB5:16,BTN5:16 };
+    const btn = MOUSE[mkpM[1]];
+    if (btn === undefined) return null;
+    return { beh: 'mkp', p1: btn, p2: 0 };
+  }
+
+  const btM = str.match(/^&bt\s+(\S+)(?:\s+(\d+))?$/);
+  if (btM) {
+    const BT_ACTIONS = { BT_SEL:0, BT_NXT:1, BT_PRV:2, BT_CLR:3, BT_CLR_ALL:4 };
+    const action = BT_ACTIONS[btM[1]];
+    if (action === undefined) return null;
+    return { beh: 'bt', p1: action, p2: btM[2] !== undefined ? parseInt(btM[2]) : 0 };
+  }
+
+  return null;
+}
 
 // ─────────────────────────────────────────────
 // WebSerial
@@ -800,6 +1485,7 @@ document.getElementById('btn-serial').addEventListener('click', async () => {
     setDevStatus(true, 'USB Serial 接続中');
     document.getElementById('btn-serial').classList.add('hidden');
     document.getElementById('btn-disconnect').classList.remove('hidden');
+    document.getElementById('btn-read-device').classList.remove('hidden');
     document.getElementById('btn-write-device').classList.remove('hidden');
     log('Serial 接続完了', 'log-ok');
   } catch (err) {
@@ -814,6 +1500,7 @@ document.getElementById('btn-disconnect').addEventListener('click', async () => 
   setDevStatus(false, 'デバイス 未接続');
   document.getElementById('btn-serial').classList.remove('hidden');
   document.getElementById('btn-disconnect').classList.add('hidden');
+  document.getElementById('btn-read-device').classList.add('hidden');
   document.getElementById('btn-write-device').classList.add('hidden');
   log('切断しました', 'log-warn');
 });
@@ -822,71 +1509,98 @@ function setDevStatus(connected, label) {
   document.getElementById('dev-dot').className   = `dot ${connected ? 'dot-green' : 'dot-gray'}`;
   document.getElementById('dev-status').textContent = label;
 }
-function setGhStatus(connected, label) {
-  document.getElementById('gh-dot').className    = `dot ${connected ? 'dot-green' : 'dot-red'}`;
-  document.getElementById('gh-status').textContent = label;
+function setGhStatus(connected) {
+  const chip = document.getElementById('repo-chip');
+  if (connected) {
+    const { owner, repo } = S.kb;
+    document.getElementById('repo-chip-text').innerHTML =
+      `<span style="color:var(--muted);font-weight:400">${owner}</span>`+
+      `<span class="repo-sep"> / </span><strong>${repo}</strong>`;
+    chip.href = `https://github.com/${owner}/${repo}`;
+    chip.classList.remove('hidden');
+  } else {
+    chip.classList.add('hidden');
+  }
 }
 
 // ─────────────────────────────────────────────
 // 保存
 // ─────────────────────────────────────────────
 document.getElementById('btn-save').addEventListener('click', async () => {
-  if (!S.pat) { log('PAT が設定されていません', 'log-error'); return; }
-
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
-  btn.textContent = '保存中...';
+
+  const hasEdits   = Object.keys(S.edits).length > 0;
+  const hasPending = Object.keys(S.githubSaved).length > 0;
 
   try {
-    // 1. keymap 再構築
-    log('keymap を再構築中...', 'log-info');
-    const newContent = reconstructKeymap(S.keymapRaw, S.layers);
+    // ── GitHub push フェーズ（新しい編集がある場合のみ）──
+    if (hasEdits) {
+      if (!S.pat) { log('PAT が設定されていません', 'log-error'); return; }
+      btn.textContent = '保存中...';
 
-    // 2. GitHub PUT
-    log('GitHub にプッシュ中...', 'log-info');
-    const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
-    const commitMsg = `keymap: update ${changed} via zmk-keymap-sync`;
-    const putResult = await ghPutFile(KEYMAP_PATH, newContent, S.keymapSha, commitMsg);
-    log('✓ GitHub プッシュ完了 → GitHub Actions ビルド開始', 'log-ok');
-    log(`  確認: https://github.com/${OWNER}/${REPO}/actions`, 'log-info');
+      log('keymap を再構築中...', 'log-info');
+      const newContent = reconstructKeymap(S.keymapRaw, S.layers);
 
-    // 3. 実機書き込み（接続中の場合のみ）
+      log('GitHub にプッシュ中...', 'log-info');
+      const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
+      const commitMsg = `keymap: update ${changed} via zmk-keymap-sync`;
+      const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, commitMsg);
+      log('✓ GitHub プッシュ完了 → GitHub Actions ビルド開始', 'log-ok');
+      log(`  確認: https://github.com/${S.kb.owner}/${S.kb.repo}/actions`, 'log-info');
+
+      // push した編集をフラッシュ待ちとして保存し、edits をクリア
+      S.githubSaved = { ...S.edits };
+      S.edits = {};
+      for (const layer of S.layers) {
+        layer.originalBindings = [...layer.bindings];
+        layer.dirty = false;
+      }
+      S.keymapSha = putResult.content.sha;
+      S.keymapRaw = newContent;
+      renderLayerTabs();
+      updateChangeBadge();
+    }
+
+    // ── 実機書き込みフェーズ ──
     if (S.transport) {
-      log('実機に書き込み中...', 'log-info');
-      await writeToDevice();
-    } else {
-      log('デバイス未接続のため実機書き込みスキップ（実機書き込みボタンで後から書き込み可）', 'log-warn');
+      if (Object.keys(S.githubSaved).length > 0) {
+        btn.textContent = '書き込み中...';
+        log('実機に書き込み中...', 'log-info');
+        await writeToDevice();
+        S.githubSaved = {};
+        log('✓ 実機書き込み完了！', 'log-ok');
+      } else if (!hasEdits) {
+        log('書き込む変更がありません', 'log-warn');
+      }
+    } else if (hasEdits) {
+      log('⚠ デバイス未接続 — GitHub push 済み。USB 接続後にボタンを再度押すと実機に書き込まれます', 'log-warn');
+    } else if (!hasPending) {
+      log('書き込む変更がありません。キーを編集してから保存してください', 'log-warn');
     }
-
-    // 4. 状態リセット
-    for (const layer of S.layers) {
-      layer.originalBindings = [...layer.bindings];
-      layer.dirty = false;
-    }
-    S.edits = {};
-
-    // PUT レスポンスから新しい SHA を取得（re-fetch だと CDN キャッシュで古い SHA が返ることがある）
-    S.keymapSha = putResult.content.sha;
-    S.keymapRaw = newContent;
-
-    renderLayerTabs();
-    updateChangeBadge();
-    log('✓ 保存完了！', 'log-ok');
 
   } catch (err) {
     log(`保存エラー: ${err.message}`, 'log-error');
   } finally {
-    btn.disabled    = false;
-    btn.textContent = '💾 保存 (GitHub + 実機)';
+    btn.disabled = false;
     updateChangeBadge();
   }
 });
 
 async function writeToDevice() {
+  // S.edits を優先、なければ GitHub 保存済み (S.githubSaved) を使用
+  const source      = Object.keys(S.edits).length > 0 ? S.edits : S.githubSaved;
+  const editEntries = Object.entries(source);
+  if (editEntries.length === 0) {
+    log('書き込む変更がありません', 'log-info');
+    return;
+  }
+
   // 1. GetKeymap で実機の現在バインディング（＝実際の behaviorId）を取得
   log('実機キーマップを読み取り中 (GetKeymap)...', 'log-info');
-  const gmPkt  = buildGetKeymapRequest(50);
-  const gmResp = await serialRpc(gmPkt, 6000);
+  const gmReqId = nextRpcReqId();
+  const gmPkt  = buildGetKeymapRequest(gmReqId);
+  const gmResp = await serialRpc(gmPkt, 6000, gmReqId);
 
   if (!gmResp) {
     log('GetKeymap タイムアウト — 実機書き込みをスキップします', 'log-warn');
@@ -897,7 +1611,6 @@ async function writeToDevice() {
   log(`GetKeymap: ${gmResp.length} bytes → ${deviceBindings.size} バインディング取得`, 'log-ok');
 
   if (deviceBindings.size === 0) {
-    // デバッグ用: 先頭バイトとフィールド構造を出力
     const hex = Array.from(gmResp.slice(0, 32)).map(b => b.toString(16).padStart(2,'0')).join(' ');
     log(`  raw[0..32]: ${hex}`, 'log-warn');
     log('⚠ パース結果が空です。実機書き込みをスキップします', 'log-warn');
@@ -905,7 +1618,6 @@ async function writeToDevice() {
   }
 
   // 2. GitHub のオリジナルバインディングと照合して behavior 名 → ID マップを構築
-  //    例: {kp: 3, trans: 1, none: 2, lt: 4, mt: 5, ...}
   const behIdMap = {};
   deviceBindings.forEach((devBind, key) => {
     const [li, ki] = key.split(':').map(Number);
@@ -921,39 +1633,192 @@ async function writeToDevice() {
   log(`behavior IDs: ${Object.entries(behIdMap).map(([k,v])=>`${k}=${v}`).join(', ')}`, 'log-info');
 
   // 3. 変更キーを書き込む
-  let reqId = 100;
-  for (const [editKey, newBinding] of Object.entries(S.edits)) {
+  for (const [editKey, newBinding] of editEntries) {
     const [layerIdx, keyIdx] = editKey.split(':').map(Number);
 
-    const kpMatch = newBinding.match(/^&kp\s+(\w+)$/);
-    if (!kpMatch) {
-      log(`${newBinding} は実機書き込み未対応（GitHub のみ更新済み）`, 'log-warn');
+    const parsed = parseBindingForRpc(newBinding);
+    if (!parsed) {
+      log(`"${newBinding}" は未対応の構文 — GitHub のみ更新済み（スキップ）`, 'log-warn');
       continue;
     }
 
-    const keycode = HID_KP[kpMatch[1]];
-    if (keycode === undefined) {
-      log(`キーコード不明: ${kpMatch[1]} — スキップ`, 'log-warn');
+    const behId = behIdMap[parsed.beh];
+    if (behId === undefined) {
+      log(`"&${parsed.beh}" の behavior ID が不明（キーマップに ${parsed.beh} バインディングがない？）— スキップ`, 'log-warn');
       continue;
     }
 
-    // 書き込み先 behavior の ID を使う（現在位置の behavior ID ではなく &kp の ID）
-    const kpId = behIdMap['kp'];
-    if (kpId === undefined) {
-      log('kp behavior ID 不明（keymap に &kp バインディングが1つもない？）', 'log-warn');
-      continue;
-    }
-
-    // ZMK param1 = (HID_USAGE_KEY_PAGE=0x07 << 16) | hid_keycode
-    const zmkParam1 = (0x07 << 16) | keycode;
-    const pkt  = buildSetLayerBinding(reqId++, layerIdx, keyIdx, kpId, zmkParam1, 0);
-    const resp = await serialRpc(pkt);
+    const thisReqId = nextRpcReqId();
+    const pkt  = buildSetLayerBinding(thisReqId, layerIdx, keyIdx, behId, parsed.p1, parsed.p2);
+    const resp = await serialRpc(pkt, 3000, thisReqId);
     log(
-      `SetLayerBinding layer=${layerIdx} key=${keyIdx} ${newBinding} (id=${kpId} param1=0x${zmkParam1.toString(16)}): ${resp ? 'OK' : 'タイムアウト'}`,
+      `SetLayerBinding layer=${layerIdx} key=${keyIdx} ${newBinding} (id=${behId} p1=0x${parsed.p1.toString(16)} p2=0x${parsed.p2.toString(16)}): ${resp ? 'OK' : 'タイムアウト'}`,
       resp ? 'log-ok' : 'log-warn',
     );
   }
 }
+
+// ─────────────────────────────────────────────
+// 実機からのキーマップ読み込み
+// ─────────────────────────────────────────────
+
+// HID コード → キー名の逆引きマップ
+function buildReverseHidKp() {
+  const rev = new Map();
+  for (const [name, code] of Object.entries(HID_KP)) {
+    rev.set(code, name); // 後勝ち（後に定義された短い別名が優先）
+  }
+  // よく使うキーの表示名を明示的に優先
+  const prefer = {
+    41: 'ESC',   42: 'BSPC',  43: 'TAB',  44: 'SPACE',
+    76: 'DEL',   74: 'HOME',  77: 'END',  75: 'PG_UP', 78: 'PG_DN',
+    79: 'RIGHT', 80: 'LEFT',  81: 'DOWN', 82: 'UP',
+    0xE0: 'LCTRL', 0xE1: 'LSHFT', 0xE2: 'LALT', 0xE3: 'LGUI',
+    0xE4: 'RCTRL', 0xE5: 'RSHFT', 0xE6: 'RALT', 0xE7: 'RGUI',
+  };
+  for (const [code, name] of Object.entries(prefer)) rev.set(Number(code), name);
+  return rev;
+}
+
+// デバイスの {behaviorId, param1, param2} → ZMK binding 文字列
+function deviceBindingToString(behName, param1, param2, reverseKp) {
+  const kpLookup = p => {
+    const page    = (p >>> 16) & 0xFF;
+    const modBits = (p >>> 8) & 0xFF;
+    const code    = p & 0xFF;
+    if (page !== 0x07 && page !== 0x00) return `0x${p.toString(16)}`;
+    const keyName = reverseKp.get(code) || `0x${code.toString(16)}`;
+    if (modBits === 0) return keyName;
+    const MOD_WRAPPERS = [
+      [0x01,'LC'],[0x02,'LS'],[0x04,'LA'],[0x08,'LG'],
+      [0x10,'RC'],[0x20,'RS'],[0x40,'RA'],[0x80,'RG'],
+    ];
+    let result = keyName;
+    for (const [bit, name] of MOD_WRAPPERS) {
+      if (modBits & bit) result = `${name}(${result})`;
+    }
+    return result;
+  };
+  switch (behName) {
+    case 'kp':         return `&kp ${kpLookup(param1)}`;
+    case 'lt':         return `&lt ${param1} ${kpLookup(param2)}`;
+    case 'mt':         return `&mt ${kpLookup(param1)} ${kpLookup(param2)}`;
+    case 'none':       return '&none';
+    case 'trans':      return '&trans';
+    case 'bootloader': return '&bootloader';
+    case 'mkp': {
+      const BTN = new Map([[1,'MB1'],[2,'MB2'],[4,'MB3'],[8,'MB4'],[16,'MB5']]);
+      return `&mkp ${BTN.get(param1) ?? param1}`;
+    }
+    case 'bt': {
+      const ACTS = new Map([[0,'BT_SEL'],[1,'BT_NXT'],[2,'BT_PRV'],[3,'BT_CLR'],[4,'BT_CLR_ALL']]);
+      const act = ACTS.get(param1) ?? `BT_${param1}`;
+      return param1 === 0 ? `&bt ${act} ${param2}` : `&bt ${act}`;
+    }
+    default: return null;
+  }
+}
+
+async function loadFromDevice() {
+  if (!S.transport) { log('デバイスが接続されていません', 'log-error'); return; }
+  if (S.layers.length === 0) {
+    log('先に GitHub からキーマップを読み込んでください（behavior ID の解決に必要です）', 'log-warn');
+    return;
+  }
+
+  const btn = document.getElementById('btn-read-device');
+  btn.disabled = true;
+  btn.textContent = '読み込み中...';
+
+  try {
+    // 1. GetKeymap RPC
+    log('実機からキーマップを取得中 (GetKeymap)...', 'log-info');
+    const reqId = nextRpcReqId();
+    const resp  = await serialRpc(buildGetKeymapRequest(reqId), 6000, reqId);
+    if (!resp) { log('GetKeymap タイムアウト', 'log-error'); return; }
+
+    const deviceBindings = parseGetKeymapResponse(resp);
+    log(`GetKeymap: ${deviceBindings.size} バインディング取得`, 'log-ok');
+    if (deviceBindings.size === 0) { log('レスポンスのパースに失敗しました', 'log-error'); return; }
+
+    // 2. GitHub データで behavior ID → 名前マップを構築
+    const idToBeh = {};
+    deviceBindings.forEach(({ behaviorId }, key) => {
+      const [li, ki] = key.split(':').map(Number);
+      const layer = S.layers[li];
+      if (!layer) return;
+      const ghBind = layer.originalBindings[ki];
+      if (!ghBind) return;
+      const m = ghBind.match(/^&(\S+)/);
+      if (m && !(behaviorId in idToBeh)) idToBeh[behaviorId] = m[1];
+    });
+    log(`ビヘイビア ID: ${Object.entries(idToBeh).map(([k,v])=>`${k}=&${v}`).join(', ')}`, 'log-info');
+
+    // 3. binding 文字列に変換（GitHub 値から開始し、値レベルで一致すれば GitHub 文字列を保持）
+    const reverseKp   = buildReverseHidKp();
+    const newBindings = S.layers.map(l => [...l.originalBindings]); // GitHub 文字列を初期値に
+    let decoded = 0, unknown = 0;
+
+    // behavior 名 → ID 逆引きマップ
+    const nameToId = {};
+    Object.entries(idToBeh).forEach(([id, name]) => { nameToId[name] = Number(id); });
+
+    deviceBindings.forEach(({ behaviorId, param1, param2 }, key) => {
+      const [li, ki] = key.split(':').map(Number);
+      if (!newBindings[li] || ki >= newBindings[li].length) return;
+
+      // GitHub 文字列をパースして値レベルで一致するか確認
+      const ghStr = S.layers[li].originalBindings[ki];
+      const ghRpc = parseBindingForRpc(ghStr);
+      if (ghRpc && nameToId[ghRpc.beh] === behaviorId
+          && ghRpc.p1 === param1 && ghRpc.p2 === param2) {
+        // 同一値 → 表記の差は無視し GitHub 文字列をそのまま保持
+        decoded++;
+        return;
+      }
+
+      // 値が異なる → 実機の値でデコードして上書き
+      const behName = idToBeh[behaviorId];
+      if (!behName) { unknown++; return; }
+      const str = deviceBindingToString(behName, param1, param2, reverseKp);
+      if (str !== null) { newBindings[li][ki] = str; decoded++; }
+      else unknown++;
+    });
+
+    // 4. S.layers に反映し、GitHub との差分を S.edits に記録
+    S.edits = {};
+    S.githubSaved = {};
+    S.layers.forEach((layer, li) => {
+      layer.bindings = newBindings[li];
+      for (let ki = 0; ki < layer.bindings.length; ki++) {
+        if (layer.bindings[ki] !== layer.originalBindings[ki]) {
+          S.edits[`${li}:${ki}`] = layer.bindings[ki];
+        }
+      }
+      layer.dirty = layer.bindings.some((b, i) => b !== layer.originalBindings[i]);
+    });
+
+    renderLayerTabs();
+    renderKeyboard();
+    updateChangeBadge();
+    log(`✓ 実機読み込み完了 — デコード: ${decoded} キー / 不明 behavior: ${unknown} キー`, 'log-ok');
+
+    const diffCount = Object.keys(S.edits).length;
+    if (diffCount > 0) {
+      log(`  GitHub との差分: ${diffCount} 件 — 「保存 (GitHub + 実機)」で GitHub に反映できます`, 'log-warn');
+    } else {
+      log('  実機と GitHub のキーマップは一致しています', 'log-ok');
+    }
+
+  } catch (err) {
+    log(`実機読み込みエラー: ${err.message}`, 'log-error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '📥 実機';
+  }
+}
+
+document.getElementById('btn-read-device').addEventListener('click', loadFromDevice);
 
 // ─────────────────────────────────────────────
 // 実機書き込みのみ（GitHub プッシュなし）
@@ -968,6 +1833,8 @@ document.getElementById('btn-write-device').addEventListener('click', async () =
   try {
     log('実機に書き込み中...', 'log-info');
     await writeToDevice();
+    S.githubSaved = {};
+    updateChangeBadge();
     log('✓ 実機書き込み完了', 'log-ok');
   } catch (err) {
     log(`実機書き込みエラー: ${err.message}`, 'log-error');
@@ -983,6 +1850,7 @@ document.getElementById('btn-write-device').addEventListener('click', async () =
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('pat-input').value = S.pat;
   document.getElementById('pat-cancel').classList.remove('hidden');
+  document.getElementById('pat-no-pat-hint').classList.toggle('hidden', !!S.pat);
   document.getElementById('pat-modal').classList.remove('hidden');
 });
 
@@ -1000,6 +1868,7 @@ document.getElementById('pat-save').addEventListener('click', async () => {
   S.pat = pat;
   localStorage.setItem('zmk_pat', pat);
   document.getElementById('pat-modal').classList.add('hidden');
+  document.getElementById('pat-no-pat-hint').classList.add('hidden');
   await loadData();
 });
 
@@ -1009,32 +1878,199 @@ document.getElementById('pat-save').addEventListener('click', async () => {
 document.getElementById('btn-reload').addEventListener('click', loadData);
 
 // ─────────────────────────────────────────────
+// コンボエディタ
+// ─────────────────────────────────────────────
+
+// keymap raw から combos セクションを抽出（ブレースカウント方式）
+function parseCombos(raw) {
+  if (!raw) return [];
+
+  const combosM = /\bcombos\s*\{/.exec(raw);
+  if (!combosM) return [];
+
+  // combos { ... } の終端を括弧カウントで特定
+  let depth = 0, blockEnd = -1;
+  for (let i = combosM.index; i < raw.length; i++) {
+    if (raw[i] === '{') depth++;
+    else if (raw[i] === '}' && --depth === 0) { blockEnd = i; break; }
+  }
+  if (blockEnd === -1) return [];
+
+  const section = raw.slice(combosM.index, blockEnd + 1);
+  if (!section.includes('"zmk,combos"')) return [];
+
+  // 外側の combos { } を除いた中身
+  const inner = section.slice(section.indexOf('{') + 1, section.length - 1);
+
+  const combos = [];
+  let pos = 0;
+
+  while (pos < inner.length) {
+    const m = /(\w+)\s*\{/.exec(inner.slice(pos));
+    if (!m) break;
+
+    const name = m[1];
+    const bracePos = pos + m.index + m[0].length - 1; // { の位置
+
+    let d = 0, endPos = -1;
+    for (let i = bracePos; i < inner.length; i++) {
+      if (inner[i] === '{') d++;
+      else if (inner[i] === '}' && --d === 0) { endPos = i; break; }
+    }
+    if (endPos === -1) break;
+
+    const body = inner.slice(bracePos + 1, endPos);
+    const timeout = (body.match(/timeout-ms\s*=\s*<(\d+)>/) || [])[1] || '50';
+    const posM = body.match(/key-positions\s*=\s*<([^>]+)>/);
+    const positions = posM ? posM[1].trim() : '';
+    const bindM = body.match(/bindings\s*=\s*<([^>]+)>/);
+    const binding = bindM ? bindM[1].trim() : '';
+    const layerM = body.match(/layers\s*=\s*<([^>]+)>/);
+    const layers = layerM ? layerM[1].trim() : '';
+
+    if (positions || binding) {
+      combos.push({ name, timeout, positions, binding, layers });
+    }
+    pos = endPos + 1;
+  }
+
+  return combos;
+}
+
+// combos 配列 → DTS セクション文字列
+function buildCombosSection(combos) {
+  if (combos.length === 0) return '';
+  let s = '\tcombos {\n\t\tcompatible = "zmk,combos";\n';
+  for (const c of combos) {
+    s += `\t\t${c.name} {\n`;
+    s += `\t\t\ttimeout-ms = <${c.timeout}>;\n`;
+    s += `\t\t\tkey-positions = <${c.positions}>;\n`;
+    s += `\t\t\tbindings = <${c.binding}>;\n`;
+    if (c.layers) s += `\t\t\tlayers = <${c.layers}>;\n`;
+    s += '\t\t};\n';
+  }
+  s += '\t};\n';
+  return s;
+}
+
+// keymap raw 内の combos セクションを置換（なければ / { ... }; の先頭に挿入）
+function reconstructWithCombos(raw, combos) {
+  const newSec = buildCombosSection(combos);
+
+  // 既存 combos セクションをブレースカウントで特定・置換
+  const combosM = /\bcombos\s*\{/.exec(raw);
+  if (combosM) {
+    let depth = 0, blockEnd = -1;
+    for (let i = combosM.index; i < raw.length; i++) {
+      if (raw[i] === '{') depth++;
+      else if (raw[i] === '}' && --depth === 0) { blockEnd = i; break; }
+    }
+    if (blockEnd !== -1) {
+      const inner = raw.slice(combosM.index, blockEnd + 1);
+      if (inner.includes('"zmk,combos"')) {
+        let replEnd = blockEnd + 1;
+        const trailM = /^[ \t]*;/.exec(raw.slice(replEnd));
+        if (trailM) replEnd += trailM[0].length;
+        return raw.slice(0, combosM.index) + newSec.trimEnd() + raw.slice(replEnd);
+      }
+    }
+  }
+
+  // なければ最初の / { の直後に挿入
+  return raw.replace(/^\/\s*\{/m, `/ {\n${newSec}`);
+}
+
+// コンボリストを画面に描画
+let editingCombos = [];
+function renderComboList() {
+  const list = document.getElementById('combo-list');
+  if (editingCombos.length === 0) {
+    list.innerHTML = '<p style="font-size:0.78rem;color:var(--muted);padding:4px 0;">コンボなし</p>';
+    return;
+  }
+  list.innerHTML = editingCombos.map((c, i) => `
+    <div class="combo-row" data-idx="${i}">
+      <div>
+        <label>名前</label>
+        <input type="text" value="${c.name}" data-field="name" data-idx="${i}">
+      </div>
+      <div>
+        <label>キー位置 (例: 0 1)</label>
+        <input type="text" value="${c.positions}" data-field="positions" data-idx="${i}">
+      </div>
+      <div>
+        <label>バインディング (例: &amp;kp ESC)</label>
+        <input type="text" value="${c.binding}" data-field="binding" data-idx="${i}">
+      </div>
+      <button class="btn-danger" style="font-size:0.72rem;padding:4px 8px;" data-del="${i}">削除</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      editingCombos[parseInt(inp.dataset.idx)][inp.dataset.field] = inp.value;
+    });
+  });
+  list.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingCombos.splice(parseInt(btn.dataset.del), 1);
+      renderComboList();
+    });
+  });
+}
+
+document.getElementById('btn-combo').addEventListener('click', () => {
+  editingCombos = parseCombos(S.keymapRaw).map(c => ({...c}));
+  renderComboList();
+  document.getElementById('combo-modal').classList.remove('hidden');
+});
+
+document.getElementById('combo-modal-cancel').addEventListener('click', () => {
+  document.getElementById('combo-modal').classList.add('hidden');
+});
+
+document.getElementById('btn-combo-add').addEventListener('click', () => {
+  editingCombos.push({ name: `combo_${editingCombos.length}`, timeout: '50', positions: '0 1', binding: '&kp ESC', layers: '' });
+  renderComboList();
+});
+
+document.getElementById('combo-modal-ok').addEventListener('click', () => {
+  if (!S.keymapRaw) return;
+  S.keymapRaw = reconstructWithCombos(S.keymapRaw, editingCombos);
+  document.getElementById('combo-modal').classList.add('hidden');
+  log(`コンボを keymap に反映しました（${editingCombos.length} 件）。「保存」で GitHub に push されます。`, 'log-ok');
+  // btn-save を表示（変更ありの扱い）
+  document.getElementById('btn-save').classList.remove('hidden');
+});
+
+// ─────────────────────────────────────────────
 // データ読み込み
 // ─────────────────────────────────────────────
 async function loadData() {
-  if (!S.pat) { setGhStatus(false, 'PAT 未設定'); return; }
+  if (!S.pat) { setGhStatus(false); return; }
 
   document.getElementById('keyboard-canvas').innerHTML =
     '<div style="color:var(--muted);font-size:0.85rem;padding:20px 0">読み込み中...</div>';
-  setGhStatus(false, '読み込み中...');
+  setGhStatus(false);
 
   try {
     // レイアウト JSON
     log('レイアウト JSON 取得中...', 'log-info');
-    const { content: layoutRaw } = await ghGetFile(LAYOUT_PATH);
+    const { content: layoutRaw } = await ghGetFile(S.kb.layoutPath);
     const layoutJson = JSON.parse(layoutRaw);
     S.layoutKeys = layoutJson.layouts.default_layout.layout;
     log(`レイアウト: ${S.layoutKeys.length} キー`, 'log-ok');
 
     // keymap ファイル
     log('keymap 取得中...', 'log-info');
-    const { content: keymapRaw, sha } = await ghGetFile(KEYMAP_PATH);
+    const { content: keymapRaw, sha } = await ghGetFile(S.kb.keymapPath);
     S.keymapRaw = keymapRaw;
     S.keymapSha = sha;
 
     // パース
-    S.layers = parseKeymap(keymapRaw);
-    S.edits  = {};
+    S.layers       = parseKeymap(keymapRaw);
+    S.edits        = {};
+    S.githubSaved  = {};
     log(`レイヤー: ${S.layers.length} 個`, 'log-ok');
     S.layers.forEach((l, i) =>
       log(`  Layer ${i}: ${l.name}  (${l.bindings.length} キー)`, 'log-info'));
@@ -1050,24 +2086,266 @@ async function loadData() {
     }
 
     S.currentLayer = 0;
-    setGhStatus(true, 'GitHub 接続済み');
+    setGhStatus(true);
     renderLayerTabs();
     renderKeyboard();
     updateChangeBadge();
+    document.getElementById('btn-combo').classList.remove('hidden');
 
   } catch (err) {
-    setGhStatus(false, 'エラー');
+    setGhStatus(false);
     log(`読み込みエラー: ${err.message}`, 'log-error');
   }
 }
 
 // ─────────────────────────────────────────────
+// キーボード切替
+// ─────────────────────────────────────────────
+function updateKbSwitcher() {
+  document.getElementById('kb-current-name').textContent = S.kb.label;
+  const list = document.getElementById('kb-dropdown-list');
+  const kbs  = getKeyboards();
+  list.innerHTML = kbs.map(kb => `
+    <div class="kb-item${kb.id === S.kb.id ? ' active' : ''}" data-kb-id="${kb.id}" style="justify-content:space-between">
+      <span style="flex:1;font-weight:600">${kb.label}</span>
+      <span style="font-size:0.7rem;color:var(--muted);margin-right:8px">${kb.owner}/${kb.repo}</span>
+      <button class="btn-ghost" data-kb-edit="${kb.id}" style="font-size:0.68rem;padding:2px 7px">編集</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-kb-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.closest('[data-kb-edit]')) return;
+      const id = el.dataset.kbId;
+      if (id === S.kb.id) { closeKbDropdown(); return; }
+      setActiveKbId(id);
+      S.kb = getActiveKb();
+      S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+      updateKbSwitcher();
+      closeKbDropdown();
+      loadData();
+    });
+  });
+
+  list.querySelectorAll('[data-kb-edit]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      closeKbDropdown();
+      openKbModal(el.dataset.kbEdit);
+    });
+  });
+}
+
+function closeKbDropdown() {
+  document.getElementById('kb-dropdown').classList.add('hidden');
+}
+
+document.getElementById('kb-switcher-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const dd = document.getElementById('kb-dropdown');
+  const willShow = dd.classList.contains('hidden');
+  dd.classList.toggle('hidden');
+  if (willShow) updateKbSwitcher();
+});
+
+document.addEventListener('click', () => closeKbDropdown());
+
+document.getElementById('kb-add-item').addEventListener('click', e => {
+  e.stopPropagation();
+  closeKbDropdown();
+  openKbModal(null);
+});
+
+// ─────────────────────────────────────────────
+// URL 解析・自動検出
+// ─────────────────────────────────────────────
+function parseGithubUrl(url) {
+  url = url.trim();
+  const m = url.match(/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/tree\/([^/\s]+))?(?:\/|$)/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2], branch: m[3] || null };
+}
+
+async function fetchContents(owner, repo, branch, path = '') {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+  const headers = { Accept: 'application/vnd.github.v3+json' };
+  if (S.pat) headers.Authorization = `Bearer ${S.pat}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function getDefaultBranch(owner, repo) {
+  const url = `https://api.github.com/repos/${owner}/${repo}`;
+  const headers = { Accept: 'application/vnd.github.v3+json' };
+  if (S.pat) headers.Authorization = `Bearer ${S.pat}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) return 'main';
+  const json = await res.json();
+  return json.default_branch || 'main';
+}
+
+async function detectKeymapFiles(owner, repo, branch) {
+  for (const dir of ['config', '']) {
+    let files;
+    try { files = await fetchContents(owner, repo, branch, dir); }
+    catch { continue; }
+    if (!Array.isArray(files)) continue;
+
+    const keymapF = files.find(f => f.type === 'file' && f.name.endsWith('.keymap'));
+    const layoutF = files.find(f => f.type === 'file' && f.name.endsWith('.json')
+                                    && !f.name.startsWith('package'));
+    const result = {};
+    if (keymapF) result.keymapPath = dir ? `${dir}/${keymapF.name}` : keymapF.name;
+    if (layoutF) result.layoutPath = dir ? `${dir}/${layoutF.name}` : layoutF.name;
+    if (result.keymapPath || result.layoutPath) return result;
+  }
+  return {};
+}
+
+// URL 入力 → owner/repo/branch を即時解析
+document.getElementById('kb-repo-url').addEventListener('input', () => {
+  const parsed = parseGithubUrl(document.getElementById('kb-repo-url').value);
+  if (!parsed) return;
+  document.getElementById('kb-owner').value = parsed.owner;
+  document.getElementById('kb-repo').value  = parsed.repo;
+  if (parsed.branch) document.getElementById('kb-branch').value = parsed.branch;
+  if (!document.getElementById('kb-label').value) {
+    document.getElementById('kb-label').value = parsed.repo;
+  }
+  document.getElementById('kb-detect-status').textContent = '';
+});
+
+// 自動検出ボタン
+document.getElementById('kb-detect-btn').addEventListener('click', async () => {
+  const owner  = document.getElementById('kb-owner').value.trim();
+  const repo   = document.getElementById('kb-repo').value.trim();
+  let   branch = document.getElementById('kb-branch').value.trim();
+
+  const status = document.getElementById('kb-detect-status');
+
+  if (!owner || !repo) {
+    status.style.color = 'var(--yellow)';
+    status.textContent = 'URL を貼り付けるか、オーナーとリポジトリ名を入力してください';
+    return;
+  }
+
+  const btn = document.getElementById('kb-detect-btn');
+  btn.disabled = true;
+  btn.textContent = '検出中...';
+  status.style.color = 'var(--muted)';
+  status.textContent = 'リポジトリを確認中...';
+
+  try {
+    // ブランチ未入力の場合はデフォルトブランチを取得
+    if (!branch) {
+      branch = await getDefaultBranch(owner, repo);
+      document.getElementById('kb-branch').value = branch;
+    }
+
+    status.textContent = 'ファイルを検索中...';
+    const detected = await detectKeymapFiles(owner, repo, branch);
+
+    if (detected.keymapPath) document.getElementById('kb-keymap-path').value = detected.keymapPath;
+    if (detected.layoutPath) document.getElementById('kb-layout-path').value = detected.layoutPath;
+
+    const found = [
+      detected.keymapPath && `keymap: ${detected.keymapPath}`,
+      detected.layoutPath && `layout: ${detected.layoutPath}`,
+    ].filter(Boolean);
+
+    if (found.length > 0) {
+      status.style.color = 'var(--green)';
+      status.textContent = `✓ 検出完了 — ${found.join('　')}`;
+    } else {
+      status.style.color = 'var(--yellow)';
+      status.textContent = '⚠ ファイルを自動検出できませんでした。手動で入力してください';
+    }
+  } catch (err) {
+    status.style.color = 'var(--red)';
+    status.textContent = `エラー: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 自動検出';
+  }
+});
+
+// KB モーダル
+let editingKbId = null;
+
+function openKbModal(kbId) {
+  editingKbId = kbId;
+  const kb = kbId ? getKeyboards().find(k => k.id === kbId) : null;
+  document.getElementById('kb-modal-title').textContent = kb ? 'キーボードを編集' : 'キーボードを追加';
+  document.getElementById('kb-repo-url').value         = kb ? `https://github.com/${kb.owner}/${kb.repo}` : '';
+  document.getElementById('kb-label').value            = kb?.label      ?? '';
+  document.getElementById('kb-owner').value            = kb?.owner      ?? '';
+  document.getElementById('kb-repo').value             = kb?.repo       ?? '';
+  document.getElementById('kb-branch').value           = kb?.branch     ?? '';
+  document.getElementById('kb-keymap-path').value      = kb?.keymapPath ?? '';
+  document.getElementById('kb-layout-path').value      = kb?.layoutPath ?? '';
+  document.getElementById('kb-detect-status').textContent = '';
+  document.getElementById('kb-modal-delete').classList.toggle('hidden', !kb);
+  document.getElementById('kb-modal').classList.remove('hidden');
+}
+
+document.getElementById('kb-modal-cancel').addEventListener('click', () => {
+  document.getElementById('kb-modal').classList.add('hidden');
+});
+
+document.getElementById('kb-modal-delete').addEventListener('click', () => {
+  if (!editingKbId) return;
+  let kbs = getKeyboards().filter(k => k.id !== editingKbId);
+  if (kbs.length === 0) kbs = [...DEFAULT_KEYBOARDS];
+  saveKeyboards(kbs);
+  if (S.kb.id === editingKbId) {
+    setActiveKbId(kbs[0].id);
+    S.kb = kbs[0];
+  }
+  document.getElementById('kb-modal').classList.add('hidden');
+  updateKbSwitcher();
+  S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+  loadData();
+});
+
+document.getElementById('kb-modal-save').addEventListener('click', () => {
+  const label      = document.getElementById('kb-label').value.trim();
+  const owner      = document.getElementById('kb-owner').value.trim();
+  const repo       = document.getElementById('kb-repo').value.trim();
+  const branch     = document.getElementById('kb-branch').value.trim() || 'main';
+  const keymapPath = document.getElementById('kb-keymap-path').value.trim();
+  const layoutPath = document.getElementById('kb-layout-path').value.trim();
+  if (!label || !owner || !repo || !keymapPath || !layoutPath) {
+    alert('すべての項目を入力してください');
+    return;
+  }
+
+  let kbs = getKeyboards();
+  if (editingKbId) {
+    kbs = kbs.map(k => k.id === editingKbId
+      ? { ...k, label, owner, repo, branch, keymapPath, layoutPath } : k);
+  } else {
+    const id = `kb_${Date.now()}`;
+    kbs.push({ id, label, owner, repo, branch, keymapPath, layoutPath });
+    setActiveKbId(id);
+  }
+  saveKeyboards(kbs);
+  S.kb = getActiveKb();
+  document.getElementById('kb-modal').classList.add('hidden');
+  updateKbSwitcher();
+  S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+  loadData();
+});
+
+// ─────────────────────────────────────────────
 // 初期化
 // ─────────────────────────────────────────────
 (async () => {
+  updateKbSwitcher();
   if (S.pat) {
     document.getElementById('pat-modal').classList.add('hidden');
     document.getElementById('pat-cancel').classList.remove('hidden');
+    document.getElementById('pat-no-pat-hint').classList.add('hidden');
     await loadData();
   }
   // PAT 未設定の場合はモーダルが表示されたまま
