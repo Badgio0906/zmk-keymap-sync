@@ -497,6 +497,26 @@
       <div style="flex:1"></div>
       <button class="btn-ghost" id="btn-diff-dismiss" style="font-size:0.72rem;color:var(--muted)">閉じる</button>
     </div>
+
+    <!-- 解析不能（アプリ側未対応の構文）— 差分にも適用対象にも含めない -->
+    <div class="hidden" id="unparsable-section" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <h3 style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;gap:8px">
+        解析不能（アプリ側未対応の構文）
+        <span id="unparsable-summary" style="font-size:0.72rem;font-weight:normal"></span>
+      </h3>
+      <div style="overflow-x:auto;max-height:160px;overflow-y:auto">
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th>レイヤー</th>
+              <th>キー位置</th>
+              <th>GitHub の値</th>
+            </tr>
+          </thead>
+          <tbody id="unparsable-table-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- ログ -->
@@ -556,6 +576,7 @@ const S = {
   edits:        {},        // 未 GitHub push の変更
   transport:    null,
   diffItems:    [],        // 実機/GitHub 差分一覧（差分パネル用）
+  unparsableItems: [],     // GitHub側構文が解析不能なキー一覧（差分/適用対象から除外）
   idToBeh:      {},        // 最後の GetKeymap から得た behaviorId→名前マップ
   building:     false,     // GitHub Actions ビルド中ロック状態
   buildPollToken: 0,       // インクリメントで実行中ポーラーをキャンセル
@@ -1487,11 +1508,78 @@ const HID_KP = {
   LCTRL:0xE0,LEFT_CONTROL:0xE0,LCTL:0xE0,
   LSHFT:0xE1,LSHIFT:0xE1,LEFT_SHIFT:0xE1,
   LALT:0xE2,LEFT_ALT:0xE2,
-  LGUI:0xE3,LEFT_GUI:0xE3,LWIN:0xE3,LCMD:0xE3,
+  LGUI:0xE3,LEFT_GUI:0xE3,LWIN:0xE3,LEFT_WIN:0xE3,LCMD:0xE3,LEFT_COMMAND:0xE3,LMETA:0xE3,LEFT_META:0xE3,
   RCTRL:0xE4,RIGHT_CONTROL:0xE4,RCTL:0xE4,
   RSHFT:0xE5,RSHIFT:0xE5,RIGHT_SHIFT:0xE5,
   RALT:0xE6,RIGHT_ALT:0xE6,
-  RGUI:0xE7,RIGHT_GUI:0xE7,RWIN:0xE7,RCMD:0xE7,
+  RGUI:0xE7,RIGHT_GUI:0xE7,RWIN:0xE7,RIGHT_WIN:0xE7,RCMD:0xE7,RIGHT_COMMAND:0xE7,RMETA:0xE7,RIGHT_META:0xE7,
+  // Non-US キー（page 0x07 上の通常キー、シフト無し）
+  NON_US_HASH:0x32,NUHS:0x32,
+  NON_US_BACKSLASH:0x64,NON_US_BSLH:0x64,NUBS:0x64,
+  // テンキー（Keypad）系。USB HID上は通常キーと同じページ(0x07)
+  KP_NUM:0x53,KP_NUMLOCK:0x53,
+  KP_DIVIDE:0x54,KP_SLASH:0x54,KDIV:0x54,
+  KP_MULTIPLY:0x55,KP_ASTERISK:0x55,KMLT:0x55,
+  KP_MINUS:0x56,KP_SUBTRACT:0x56,KMIN:0x56,
+  KP_PLUS:0x57,KPLS:0x57,
+  KP_ENTER:0x58,
+  KP_NUMBER_1:0x59,KP_N1:0x59,
+  KP_NUMBER_2:0x5A,KP_N2:0x5A,
+  KP_NUMBER_3:0x5B,KP_N3:0x5B,
+  KP_NUMBER_4:0x5C,KP_N4:0x5C,
+  KP_NUMBER_5:0x5D,KP_N5:0x5D,
+  KP_NUMBER_6:0x5E,KP_N6:0x5E,
+  KP_NUMBER_7:0x5F,KP_N7:0x5F,
+  KP_NUMBER_8:0x60,KP_N8:0x60,
+  KP_NUMBER_9:0x61,KP_N9:0x61,
+  KP_NUMBER_0:0x62,KP_N0:0x62,
+  KP_DOT:0x63,KP_PERIOD:0x63,
+  KP_EQUAL:0x67,
+  KP_COMMA:0x85,
+};
+
+// シフト付き記号エイリアス（ZMK keys.h の LS(...) 展開に相当。値はベースとなるHIDコード）
+// 例: PLUS = LS(EQUAL) なので、パース時に modMask へ LS ビット(0x02)を付与する
+const SHIFT_SYMBOL_ALIASES = {
+  EXCLAMATION:HID_KP.NUMBER_1, EXCL:HID_KP.NUMBER_1, BANG:HID_KP.NUMBER_1,
+  AT_SIGN:HID_KP.NUMBER_2, AT:HID_KP.NUMBER_2, ATSN:HID_KP.NUMBER_2,
+  HASH:HID_KP.NUMBER_3, POUND:HID_KP.NUMBER_3,
+  DOLLAR:HID_KP.NUMBER_4, DLLR:HID_KP.NUMBER_4,
+  PERCENT:HID_KP.NUMBER_5, PRCNT:HID_KP.NUMBER_5, PRCT:HID_KP.NUMBER_5,
+  CARET:HID_KP.NUMBER_6, CRRT:HID_KP.NUMBER_6,
+  AMPERSAND:HID_KP.NUMBER_7, AMPS:HID_KP.NUMBER_7,
+  ASTERISK:HID_KP.NUMBER_8, ASTRK:HID_KP.NUMBER_8, STAR:HID_KP.NUMBER_8,
+  LEFT_PARENTHESIS:HID_KP.NUMBER_9, LPAR:HID_KP.NUMBER_9, LPRN:HID_KP.NUMBER_9,
+  RIGHT_PARENTHESIS:HID_KP.NUMBER_0, RPAR:HID_KP.NUMBER_0, RPRN:HID_KP.NUMBER_0,
+  UNDERSCORE:HID_KP.MINUS, UNDER:HID_KP.MINUS,
+  PLUS:HID_KP.EQUAL,
+  LEFT_BRACE:HID_KP.LEFT_BRACKET, LBRC:HID_KP.LEFT_BRACKET, LCUR:HID_KP.LEFT_BRACKET,
+  RIGHT_BRACE:HID_KP.RIGHT_BRACKET, RBRC:HID_KP.RIGHT_BRACKET, RCUR:HID_KP.RIGHT_BRACKET,
+  PIPE:HID_KP.BACKSLASH,
+  PIPE2:HID_KP.NON_US_BACKSLASH,
+  TILDE2:HID_KP.NON_US_HASH,
+  COLON:HID_KP.SEMICOLON, COLN:HID_KP.SEMICOLON,
+  DOUBLE_QUOTES:HID_KP.SINGLE_QUOTE, DQT:HID_KP.SINGLE_QUOTE,
+  TILDE:HID_KP.GRAVE, TILD:HID_KP.GRAVE,
+  LESS_THAN:HID_KP.COMMA, LT:HID_KP.COMMA, LABT:HID_KP.COMMA,
+  GREATER_THAN:HID_KP.PERIOD, GT:HID_KP.PERIOD, RABT:HID_KP.PERIOD,
+  QUESTION:HID_KP.SLASH, QMARK:HID_KP.SLASH,
+};
+
+// シフト付き記号の逆変換表（コード → 優先エイリアス名）。modBitsがLSのみの場合に使用
+const SHIFT_SYMBOL_REVERSE = {
+  [HID_KP.NUMBER_1]: 'EXCLAMATION', [HID_KP.NUMBER_2]: 'AT_SIGN',
+  [HID_KP.NUMBER_3]: 'HASH', [HID_KP.NUMBER_4]: 'DOLLAR',
+  [HID_KP.NUMBER_5]: 'PERCENT', [HID_KP.NUMBER_6]: 'CARET',
+  [HID_KP.NUMBER_7]: 'AMPERSAND', [HID_KP.NUMBER_8]: 'ASTERISK',
+  [HID_KP.NUMBER_9]: 'LEFT_PARENTHESIS', [HID_KP.NUMBER_0]: 'RIGHT_PARENTHESIS',
+  [HID_KP.MINUS]: 'UNDERSCORE', [HID_KP.EQUAL]: 'PLUS',
+  [HID_KP.LEFT_BRACKET]: 'LEFT_BRACE', [HID_KP.RIGHT_BRACKET]: 'RIGHT_BRACE',
+  [HID_KP.BACKSLASH]: 'PIPE', [HID_KP.NON_US_BACKSLASH]: 'PIPE2',
+  [HID_KP.NON_US_HASH]: 'TILDE2',
+  [HID_KP.SEMICOLON]: 'COLON', [HID_KP.SINGLE_QUOTE]: 'DOUBLE_QUOTES',
+  [HID_KP.GRAVE]: 'TILDE', [HID_KP.COMMA]: 'LESS_THAN',
+  [HID_KP.PERIOD]: 'GREATER_THAN', [HID_KP.SLASH]: 'QUESTION',
 };
 
 // ZMK キーコードトークン（LC(X) などのネスト修飾子を含む）→ HID param 値
@@ -1504,7 +1592,11 @@ function parseZmkKeycode(token) {
     modMask |= bit;
     t = m[2];
   }
-  const code = HID_KP[t];
+  let code = HID_KP[t];
+  if (code === undefined && t in SHIFT_SYMBOL_ALIASES) {
+    code = SHIFT_SYMBOL_ALIASES[t];
+    modMask |= 0x02; // LS: シフト付き記号エイリアスは暗黙にLSビットを持つ
+  }
   if (code === undefined) return null;
   return (0x07 << 16) | (modMask << 8) | (code & 0xFF);
 }
@@ -1997,6 +2089,10 @@ function deviceBindingToString(behName, param1, param2, reverseKp) {
     const modBits = (p >>> 8) & 0xFF;
     const code    = p & 0xFF;
     if (page !== 0x07 && page !== 0x00) return `0x${p.toString(16)}`;
+    // シフト付き記号エイリアスへの優先逆変換（LSビット単独の場合のみ）
+    if (modBits === 0x02 && SHIFT_SYMBOL_REVERSE[code]) {
+      return SHIFT_SYMBOL_REVERSE[code];
+    }
     const keyName = reverseKp.get(code) || `0x${code.toString(16)}`;
     if (modBits === 0) return keyName;
     const MOD_WRAPPERS = [
@@ -2058,8 +2154,10 @@ async function loadFromDevice() {
     log(`ビヘイビア ID: ${Object.entries(behIdMap).map(([n,id])=>`${n}=${id}`).join(', ')}`, 'log-info');
 
     // 3. binding 文字列に変換（GitHub 値から開始し、値レベルで一致すれば GitHub 文字列を保持）
+    // 差分判定は常に「エンコード後の値」（behaviorId/param1/param2）で行う。文字列表記の違いは無視する。
     const reverseKp   = buildReverseHidKp();
     const newBindings = S.layers.map(l => [...l.originalBindings]); // GitHub 文字列を初期値に
+    const unparsableKeys = new Set(); // GitHub側構文が解析不能なキー（上書きせず別枠で報告）
     let decoded = 0, unknown = 0;
 
     deviceBindings.forEach(({ behaviorId, param1, param2 }, key) => {
@@ -2069,7 +2167,14 @@ async function loadFromDevice() {
       // GitHub 文字列をパースして値レベルで一致するか確認
       const ghStr = S.layers[li].originalBindings[ki];
       const ghRpc = parseBindingForRpc(ghStr);
-      if (ghRpc && behIdMap[ghRpc.beh] === behaviorId
+
+      if (!ghRpc) {
+        // GitHub側の構文がアプリ未対応 → 実機値との一致可否を判定できないため上書きせず「解析不能」として記録
+        unparsableKeys.add(key);
+        return;
+      }
+
+      if (behIdMap[ghRpc.beh] === behaviorId
           && ghRpc.p1 === param1 && ghRpc.p2 === param2) {
         // 同一値 → 表記の差は無視し GitHub 文字列をそのまま保持
         decoded++;
@@ -2088,20 +2193,27 @@ async function loadFromDevice() {
     S.edits = {};
     S.idToBeh = idToBeh;
 
-    // 差分一覧を構築（差分パネル用）
+    // 差分一覧・解析不能一覧を構築（差分パネル用）
     const diffItems = [];
+    const unparsableItems = [];
     S.layers.forEach((layer, li) => {
       layer.bindings = newBindings[li];
       for (let ki = 0; ki < layer.bindings.length; ki++) {
-        const ghBinding  = layer.originalBindings[ki];
-        const devBinding = layer.bindings[ki];
+        const key        = `${li}:${ki}`;
+        const ghBinding   = layer.originalBindings[ki];
+        const devBinding  = layer.bindings[ki];
+
+        if (unparsableKeys.has(key)) {
+          // 「差分」には含めず、適用対象からも除外した別枠で報告する
+          unparsableItems.push({ layerIdx: li, layerName: layer.name, keyIdx: ki, ghBinding });
+          continue;
+        }
+
         if (devBinding !== ghBinding) {
-          S.edits[`${li}:${ki}`] = devBinding;
+          S.edits[key] = devBinding;
           const parsed = parseBindingForRpc(ghBinding);
           let canApply = false, reason = '';
-          if (!parsed) {
-            reason = '未対応構文';
-          } else if (parsed.beh in behIdMap) {
+          if (parsed.beh in behIdMap) {
             canApply = true;
           } else if (conflictNames.has(parsed.beh)) {
             reason = 'behavior ID 未確定（矛盾）';
@@ -2114,18 +2226,23 @@ async function loadFromDevice() {
       layer.dirty = layer.bindings.some((b, i) => b !== layer.originalBindings[i]);
     });
     S.diffItems = diffItems;
+    S.unparsableItems = unparsableItems;
 
     renderLayerTabs();
     renderKeyboard();
     updateChangeBadge();
     log(`✓ 実機読み込み完了 — デコード: ${decoded} キー / 不明 behavior: ${unknown} キー`, 'log-ok');
 
-    if (diffItems.length > 0) {
-      log(`  GitHub との差分: ${diffItems.length} 件`, 'log-warn');
+    if (diffItems.length > 0) log(`  GitHub との差分: ${diffItems.length} 件`, 'log-warn');
+    if (unparsableItems.length > 0) log(`  解析不能（アプリ側未対応の構文）: ${unparsableItems.length} 件`, 'log-warn');
+    if (diffItems.length === 0 && unparsableItems.length === 0) {
+      log('  実機と GitHub のキーマップは一致しています', 'log-ok');
+    }
+
+    if (diffItems.length > 0 || unparsableItems.length > 0) {
       renderDiffPanel();
       document.getElementById('diff-panel').classList.remove('hidden');
     } else {
-      log('  実機と GitHub のキーマップは一致しています', 'log-ok');
       document.getElementById('diff-panel').classList.add('hidden');
     }
 
@@ -2164,6 +2281,18 @@ function renderDiffPanel() {
 
   document.getElementById('btn-apply-github-to-device').disabled =
     items.filter(d => d.canApply).length === 0;
+
+  // 解析不能（アプリ側未対応の構文）一覧 — 差分件数・適用対象には含めない
+  const unparsable = S.unparsableItems || [];
+  document.getElementById('unparsable-section').classList.toggle('hidden', unparsable.length === 0);
+  document.getElementById('unparsable-summary').textContent = `${unparsable.length} 件`;
+  document.getElementById('unparsable-table-body').innerHTML = unparsable.map(d => `
+    <tr>
+      <td>${d.layerIdx}: ${d.layerName}</td>
+      <td>${d.keyIdx}</td>
+      <td>${d.ghBinding}</td>
+    </tr>
+  `).join('');
 }
 
 async function applyGithubToDevice() {
@@ -2274,7 +2403,7 @@ async function applyGithubToDevice() {
       S.layers[item.layerIdx].bindings[item.keyIdx] = item.devBinding;
       S.layers[item.layerIdx].dirty = true;
     }
-    if (S.diffItems.length > 0) {
+    if (S.diffItems.length > 0 || (S.unparsableItems && S.unparsableItems.length > 0)) {
       renderDiffPanel();
       document.getElementById('diff-panel').classList.remove('hidden');
     } else {
