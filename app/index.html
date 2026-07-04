@@ -554,7 +554,6 @@ const S = {
   keymapSha:    null,
   currentLayer: 0,
   edits:        {},        // 未 GitHub push の変更
-  githubSaved:  {},        // GitHub push 済み・実機未書き込みの変更
   transport:    null,
   diffItems:    [],        // 実機/GitHub 差分一覧（差分パネル用）
   idToBeh:      {},        // 最後の GetKeymap から得た behaviorId→名前マップ
@@ -1170,8 +1169,7 @@ function applyKeyEdit() {
 }
 
 function updateChangeBadge() {
-  const editCount  = Object.keys(S.edits).length;
-  const savedCount = Object.keys(S.githubSaved).length;
+  const editCount = Object.keys(S.edits).length;
   const badge   = document.getElementById('change-badge');
   const saveBtn = document.getElementById('btn-save');
 
@@ -1181,13 +1179,6 @@ function updateChangeBadge() {
     badge.classList.remove('hidden');
     saveBtn.textContent = '💾 保存 (GitHub + 実機)';
     saveBtn.className = 'btn-success';
-  } else if (savedCount > 0) {
-    badge.textContent = `GitHub 保存済 · 実機未書き込み (${savedCount} 件)`;
-    badge.className = 'change-badge';
-    badge.style.color = 'var(--accent)';
-    badge.classList.remove('hidden');
-    saveBtn.textContent = '⚡ 実機に書き込み';
-    saveBtn.className = 'btn-primary';
   } else {
     badge.classList.add('hidden');
     saveBtn.textContent = '💾 保存 (GitHub + 実機)';
@@ -1600,83 +1591,75 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
 
-  const hasEdits   = Object.keys(S.edits).length > 0;
-  const hasPending = Object.keys(S.githubSaved).length > 0;
+  const hasEdits = Object.keys(S.edits).length > 0;
 
   try {
-    // ── GitHub push フェーズ（新しい編集がある場合のみ）──
-    if (hasEdits) {
-      if (!S.pat) { log('PAT が設定されていません', 'log-error'); return; }
-      btn.textContent = '保存中...';
-
-      log('keymap を再構築中...', 'log-info');
-      const newContent = reconstructKeymap(S.keymapRaw, S.layers);
-
-      log('GitHub にプッシュ中...', 'log-info');
-
-      // SHA 競合チェック：push 前に最新 SHA を再取得し、差異があれば中止
-      const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
-      if (latestSha !== S.keymapSha) {
-        log('⚠ GitHub上でファイルが変更されています', 'log-warn');
-        const editCount = Object.keys(S.edits).length;
-        const choice    = await showShaConflictModal(editCount);
-        if (choice === 'reload') {
-          log('リモートを再読み込みします...', 'log-info');
-          await loadData();
-        } else {
-          log('  保存をキャンセルしました — ローカルの編集内容は保持されています', 'log-info');
-        }
-        return;
-      }
-
-      const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
-      const commitMsg = `keymap: update ${changed} via zmk-keymap-sync`;
-      const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, commitMsg);
-      log('✓ GitHub プッシュ完了 → GitHub Actions ビルド開始', 'log-ok');
-      log(`  確認: https://github.com/${S.kb.owner}/${S.kb.repo}/actions`, 'log-info');
-
-      // push した編集をフラッシュ待ちとして保存し、edits をクリア
-      S.githubSaved = { ...S.edits };
-      S.edits = {};
-      for (const layer of S.layers) {
-        layer.originalBindings = [...layer.bindings];
-        layer.dirty = false;
-      }
-      S.keymapSha = putResult.content.sha;
-      S.keymapRaw = newContent;
-      renderLayerTabs();
-      updateChangeBadge();
-
-      // Actions ビルド監視を開始（非同期・バックグラウンド）
-      const commitSha = putResult.commit.sha;
-      setBuildLock(true);
-      pollBuildStatus(commitSha).catch(e => {
-        log(`ビルド監視エラー: ${e.message}`, 'log-warn');
-        setBuildLock(false);
-      });
-    }
-
-    // ── 実機書き込みフェーズ ──
-    if (S.transport) {
-      if (Object.keys(S.githubSaved).length > 0) {
-        btn.textContent = '書き込み中...';
-        log('実機に書き込み中...', 'log-info');
-        await writeToDevice();
-        S.githubSaved = {};
-        log('✓ 実機書き込み完了！', 'log-ok');
-      } else if (!hasEdits) {
-        log('書き込む変更がありません', 'log-warn');
-      }
-    } else if (hasEdits) {
-      log('⚠ デバイス未接続 — GitHub push 済み。USB 接続後にボタンを再度押すと実機に書き込まれます', 'log-warn');
-    } else if (!hasPending) {
+    if (!hasEdits) {
       log('書き込む変更がありません。キーを編集してから保存してください', 'log-warn');
+      return;
     }
+    if (!S.pat) { log('PAT が設定されていません', 'log-error'); return; }
+
+    btn.textContent = '保存中...';
+    log('keymap を再構築中...', 'log-info');
+    const newContent = reconstructKeymap(S.keymapRaw, S.layers);
+
+    // ── 1. SHA 競合チェック ──
+    const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
+    if (latestSha !== S.keymapSha) {
+      log('⚠ GitHub上でファイルが変更されています', 'log-warn');
+      const editCount = Object.keys(S.edits).length;
+      const choice    = await showShaConflictModal(editCount);
+      if (choice === 'reload') {
+        log('リモートを再読み込みします...', 'log-info');
+        await loadData();
+      } else {
+        log('  保存をキャンセルしました — ローカルの編集内容は保持されています', 'log-info');
+      }
+      return;
+    }
+
+    // ── 2. 実機書き込み（GitHub push 前・即時反映）──
+    if (S.transport) {
+      btn.textContent = '実機に書き込み中...';
+      log('実機に書き込み中（GitHub push 前）...', 'log-info');
+      await writeToDevice();
+      log('✓ 実機書き込み完了', 'log-ok');
+    } else {
+      log('⚠ デバイス未接続 — GitHub push 後、接続して「実機に書き込み」で反映できます', 'log-warn');
+    }
+
+    // ── 3. GitHub push ──
+    btn.textContent = 'GitHub に保存中...';
+    log('GitHub にプッシュ中...', 'log-info');
+
+    const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
+    const commitMsg = `keymap: update ${changed} via zmk-keymap-sync`;
+    const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, commitMsg);
+    log('✓ GitHub プッシュ完了 → GitHub Actions ビルド開始', 'log-ok');
+    log(`  確認: https://github.com/${S.kb.owner}/${S.kb.repo}/actions`, 'log-info');
+
+    S.edits = {};
+    for (const layer of S.layers) {
+      layer.originalBindings = [...layer.bindings];
+      layer.dirty = false;
+    }
+    S.keymapSha = putResult.content.sha;
+    S.keymapRaw = newContent;
+    renderLayerTabs();
+    updateChangeBadge();
+
+    // ── 4. Actions ビルド監視を開始（非同期・バックグラウンド）──
+    const commitSha = putResult.commit.sha;
+    setBuildLock(true);
+    pollBuildStatus(commitSha).catch(e => {
+      log(`ビルド監視エラー: ${e.message}`, 'log-warn');
+      setBuildLock(false);
+    });
 
   } catch (err) {
     log(`保存エラー: ${err.message}`, 'log-error');
   } finally {
-    // ビルド中ロック中はbtn-saveをポーリング完了まで再有効化しない
     if (!S.building) btn.disabled = false;
     btn.textContent = '💾 保存 (GitHub + 実機)';
     updateChangeBadge();
@@ -1684,19 +1667,10 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 });
 
 async function writeToDevice() {
-  // S.edits を優先、なければ GitHub 保存済み (S.githubSaved) を使用
-  const source      = Object.keys(S.edits).length > 0 ? S.edits : S.githubSaved;
-  const editEntries = Object.entries(source);
-  if (editEntries.length === 0) {
-    log('書き込む変更がありません', 'log-info');
-    return;
-  }
-
   // 1. GetKeymap で実機の現在バインディング（＝実際の behaviorId）を取得
   log('実機キーマップを読み取り中 (GetKeymap)...', 'log-info');
   const gmReqId = nextRpcReqId();
-  const gmPkt  = buildGetKeymapRequest(gmReqId);
-  const gmResp = await serialRpc(gmPkt, 6000, gmReqId);
+  const gmResp  = await serialRpc(buildGetKeymapRequest(gmReqId), 6000, gmReqId);
 
   if (!gmResp) {
     log('GetKeymap タイムアウト — 実機書き込みをスキップします', 'log-warn');
@@ -1713,34 +1687,52 @@ async function writeToDevice() {
     return;
   }
 
-  // 2. behavior 名→ID マップを堅牢に構築（param 一致位置のみ・矛盾除外）
+  // 2. behavior 名→ID マップを構築（originalBindings と実機の一致位置のみ・矛盾除外）
   const { behIdMap } = buildBehIdMap(deviceBindings, S.layers);
   log(`behavior IDs: ${Object.entries(behIdMap).map(([k,v])=>`${k}=${v}`).join(', ')}`, 'log-info');
 
-  // 3. 変更キーを書き込む
-  for (const [editKey, newBinding] of editEntries) {
-    const [layerIdx, keyIdx] = editKey.split(':').map(Number);
+  // 3. S.layers.bindings（現在の目標値）と実機の差分を計算
+  const diffs = [];
+  for (let li = 0; li < S.layers.length; li++) {
+    for (let ki = 0; ki < S.layers[li].bindings.length; ki++) {
+      const devBind = deviceBindings.get(`${li}:${ki}`);
+      if (!devBind) continue;
 
-    const parsed = parseBindingForRpc(newBinding);
-    if (!parsed) {
-      log(`"${newBinding}" は未対応の構文 — GitHub のみ更新済み（スキップ）`, 'log-warn');
-      continue;
+      const targetBinding = S.layers[li].bindings[ki];
+      const targetParsed  = parseBindingForRpc(targetBinding);
+      if (!targetParsed) continue;
+
+      const behId = behIdMap[targetParsed.beh];
+      if (behId === undefined) continue;
+
+      if (behId === devBind.behaviorId
+          && targetParsed.p1 === devBind.param1
+          && targetParsed.p2 === devBind.param2) continue; // 実機と一致 → スキップ
+
+      diffs.push({ li, ki, targetBinding, targetParsed, behId });
     }
+  }
 
-    const behId = behIdMap[parsed.beh];
-    if (behId === undefined) {
-      log(`"&${parsed.beh}" の behavior ID が不明（キーマップに ${parsed.beh} バインディングがない？）— スキップ`, 'log-warn');
-      continue;
-    }
+  if (diffs.length === 0) {
+    log('実機はGitHubと一致しています（書き込み不要）', 'log-ok');
+    return;
+  }
 
-    const thisReqId = nextRpcReqId();
-    const pkt  = buildSetLayerBinding(thisReqId, layerIdx, keyIdx, behId, parsed.p1, parsed.p2);
-    const resp = await serialRpc(pkt, 3000, thisReqId);
+  // 4. 差分キーを書き込む
+  log(`差分 ${diffs.length} キーを実機に書き込みます...`, 'log-info');
+  let written = 0, skipped = 0;
+  for (const { li, ki, targetBinding, targetParsed, behId } of diffs) {
+    const reqId = nextRpcReqId();
+    const pkt   = buildSetLayerBinding(reqId, li, ki, behId, targetParsed.p1, targetParsed.p2);
+    const resp  = await serialRpc(pkt, 3000, reqId);
     log(
-      `SetLayerBinding layer=${layerIdx} key=${keyIdx} ${newBinding} (id=${behId} p1=0x${parsed.p1.toString(16)} p2=0x${parsed.p2.toString(16)}): ${resp ? 'OK' : 'タイムアウト'}`,
+      `SetLayerBinding L${li}:K${ki} ${targetBinding} (id=${behId} p1=0x${targetParsed.p1.toString(16)} p2=0x${targetParsed.p2.toString(16)}): ${resp ? 'OK' : 'タイムアウト'}`,
       resp ? 'log-ok' : 'log-warn',
     );
+    if (resp) written++; else skipped++;
   }
+
+  log(`書き込み完了 — ${written} 件成功 / ${skipped} 件スキップ`, written > 0 ? 'log-ok' : 'log-warn');
 }
 
 // ─────────────────────────────────────────────
@@ -1799,12 +1791,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function setBuildLock(locked) {
   S.building = locked;
-  ['btn-save', 'btn-write-device'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = locked;
-  });
-  const canvas = document.getElementById('keyboard-canvas');
-  if (canvas) canvas.classList.toggle('build-locked', locked);
+  const btn = document.getElementById('btn-save');
+  if (btn) {
+    btn.disabled = locked;
+    btn.title    = locked ? 'ビルド中のため保存できません' : '';
+  }
 }
 
 function showBuildStatus(state, text) {
@@ -2053,7 +2044,6 @@ async function loadFromDevice() {
 
     // 4. S.layers に反映し、GitHub との差分を S.edits に記録
     S.edits = {};
-    S.githubSaved = {};
     S.idToBeh = idToBeh;
 
     // 差分一覧を構築（差分パネル用）
@@ -2235,7 +2225,6 @@ async function applyGithubToDevice() {
 
     // 5. 状態リセット
     S.edits = {};
-    S.githubSaved = {};
     // 差分パネルに残るものがあれば S.edits に記録してキーボード表示に反映
     S.layers.forEach(layer => { layer.bindings = [...layer.originalBindings]; layer.dirty = false; });
     for (const item of S.diffItems) {
@@ -2285,8 +2274,6 @@ document.getElementById('btn-write-device').addEventListener('click', async () =
   try {
     log('実機に書き込み中...', 'log-info');
     await writeToDevice();
-    S.githubSaved = {};
-    updateChangeBadge();
     log('✓ 実機書き込み完了', 'log-ok');
   } catch (err) {
     log(`実機書き込みエラー: ${err.message}`, 'log-error');
@@ -2520,9 +2507,8 @@ async function loadData() {
     S.keymapSha = sha;
 
     // パース
-    S.layers       = parseKeymap(keymapRaw);
-    S.edits        = {};
-    S.githubSaved  = {};
+    S.layers = parseKeymap(keymapRaw);
+    S.edits  = {};
     log(`レイヤー: ${S.layers.length} 個`, 'log-ok');
     S.layers.forEach((l, i) =>
       log(`  Layer ${i}: ${l.name}  (${l.bindings.length} キー)`, 'log-info'));
