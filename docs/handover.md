@@ -1,6 +1,7 @@
 # ZMK Keymap Sync — プロジェクト引き継ぎ書
 
 作成日: 2026-07-03  
+更新日: 2026-07-04（Task 0〜4・修正A〜E 完了後）  
 リポジトリ: https://github.com/Badgio0906/zmk-keymap-sync  
 対象キーボード（デフォルト）: **roBa**（Badgio0906/zmk-config-roBa）
 
@@ -11,8 +12,15 @@
 ZMKファームウェアを使う自作キーボードのキーマップを、WebアプリUIから変更する。  
 変更時に以下を**同時実行**して「結果的同期」の状態を保つ：
 
-- **即時バイナリ**：ZMK Studio RPCプロトコル（WebSerial/WebBluetooth）経由で実機フラッシュを直接書き換え
+- **即時バイナリ**：ZMK Studio RPCプロトコル（WebSerial/WebBluetooth）経由で実機の **settingsパーティション** を直接書き換え
 - **ビルドバイナリ**：GitHubに `.keymap` を push → GitHub Actions でビルド（実機には焼かない・ソース正確性の担保目的）
+
+### 重要: settingsパーティションの性質
+
+ZMK Studio RPC による変更は **settingsパーティション（NVS領域）** に保存される。
+- ファームウェアを手動で再フラッシュしても、RPC変更は消えない（`Restore Stock Settings` 実行時のみリセット）
+- よって **GitHub側の変更を実機に反映する唯一の正式経路は「RPC適用」**（手動フラッシュで解決できない）
+- 「ビルドバイナリを焼けば実機がGitHubと一致する」という前提は誤り
 
 ### 背景
 
@@ -28,9 +36,9 @@ ZMKファームウェアを使う自作キーボードのキーマップを、We
 ## 2. 技術スタック
 
 - **形態**: 純粋 Webアプリ（バックエンドなし）、単一 HTML ファイル
-- **ファイル**: `app/index.html`（全実装を1ファイルに収容）
+- **ファイル**: `app/index.html`（全実装を1ファイルに収容、外部ライブラリ禁止）
 - **対応ブラウザ**: Chrome / Edge（PC・Android）、Bluefy等（iOS）
-- **接続**: WebSerial（USB）／WebBluetooth（BLE）
+- **接続**: WebSerial（USB）／WebBluetooth（BLE・未実装）
 - **GitHub連携**: Personal Access Token（PAT）＋ GitHub REST API v3
 - **RPC通信**: 独自バイトスタッフィング ＋ Protobuf（手書きエンコーダ/デコーダ）
 - **状態管理**: `localStorage`（PAT、キーボード設定）＋ グローバル `S` オブジェクト
@@ -46,7 +54,7 @@ ZMKファームウェアを使う自作キーボードのキーマップを、We
 0xAB = Start of Frame (SOF)
 0xAC = Escape byte (ESC)
 0xAD = End of Frame (EOF)
-データ中に0xAB/0xAC/0xADが現れたら [0xAC, byte] にエスケープ
+データ中に 0xAB/0xAC/0xAD が現れたら [0xAC, byte] にエスケープ
 ```
 
 **Protobuf フィールド番号:**
@@ -57,24 +65,51 @@ ZMKファームウェアを使う自作キーボードのキーマップを、We
 - RpcResponse: field1(wire2) = RequestResponse { field1=requestId, field5=KeymapResponse }
 - KeymapResponse: field1=GetKeymapResponse { field1=layers(repeated) }
 
-**GetKeymap リクエスト例:**
-```
-送信: [ab 08 01 2a 02 08 01 ad]
-応答から roBa_R の全レイヤー・全キーの behaviorId/param1/param2 が得られる
+**wire type 対応状況（Task 1 修正後）:**
+- wire 0（varint）: 読み取り ✓
+- wire 2（length-delimited）: 読み取り ✓
+- wire 1（64-bit）: 8バイトスキップして継続 ✓（旧実装は停止していた）
+- wire 5（32-bit）: 4バイトスキップして継続 ✓（旧実装は停止していた）
+- wire 3/4 等: ログ警告を出してデコード中断
+
+---
+
+## 3. グローバル状態 `S` オブジェクト
+
+```javascript
+const S = {
+  pat:            '',          // GitHub PAT（localStorage）
+  kb:             {},          // 現在選択中のキーボード設定
+  layoutKeys:     [],          // KLEレイアウト
+  layers:         [],          // { name, bindings[], originalBindings[], dirty }[]
+  keymapRaw:      null,        // .keymap の生テキスト
+  keymapSha:      null,        // GitHub ファイル SHA（競合検出用）
+  currentLayer:   0,
+  edits:          {},          // 未push の変更 { "layerIdx:keyIdx": binding }
+  githubSaved:    {},          // GitHub push済み・実機未書き込みの変更
+  transport:      null,        // WebSerial ポートオブジェクト
+  diffItems:      [],          // 実機/GitHub 差分一覧（差分パネル用）
+  idToBeh:        {},          // 最後の GetKeymap から得た behaviorId→名前マップ
+  building:       false,       // GitHub Actions ビルド中ロック状態
+  buildPollToken: 0,           // インクリメントで実行中ポーラーをキャンセル
+};
 ```
 
 ---
 
-## 3. 現在の実装状態（`app/index.html`）
+## 4. 現在の実装状態（`app/index.html`）
 
-### 3-1. 実装済み機能
+### 4-1. 実装済み機能
 
 #### GitHub 連携
 - PAT（Personal Access Token）による認証（localStorage 保存）
-- GitHub API 経由で `.keymap` と レイアウト JSON を取得
+- GitHub API 経由で `.keymap` とレイアウト JSON を取得
 - PAT 未設定時は設定モーダルを自動表示
 - GitHub に `.keymap` を PUT（コミットメッセージ付き）
-- ファイルの SHA 管理（競合防止）
+- **SHA競合対策（Task 3・修正D）**:
+  - push 前に `ghGetFile` で最新 SHA を再取得
+  - 差異あり → SHA競合モーダルを表示（件数付き警告・リロードボタン・キャンセルボタン）
+  - 強制上書きオプションなし
 
 #### キーボード管理
 - 複数キーボードの切り替え（localStorage に設定を保存）
@@ -88,6 +123,7 @@ ZMKファームウェアを使う自作キーボードのキーマップを、We
 - レイヤータブ（dirty 表示 `•` 付き）
 - キーをクリックしてバインディング変更モーダルを開く
 - 変更済みキーのハイライト表示
+- **beforeunload 離脱警告（Task 3）**: `S.edits` に未保存変更がある間はブラウザ離脱確認を表示
 
 #### キー編集モーダル
 対応ビヘイビア（すべて実機書き込み対応）:
@@ -103,15 +139,18 @@ ZMKファームウェアを使う自作キーボードのキーマップを、We
 
 #### 保存フロー
 ```
-[保存ボタン] 
+[保存ボタン]
   ↓ 編集あり
-  1. reconstructKeymap() で .keymap テキスト再構築
-  2. GitHub API PUT でプッシュ → S.edits を S.githubSaved に移行
+  1. GitHub から最新 SHA を再取得（競合チェック）
+     → 差異あり: SHA競合モーダル表示 → ユーザー選択（リロードorキャンセル）
+  2. reconstructKeymap() で .keymap テキスト再構築
+  3. GitHub API PUT でプッシュ → S.edits を S.githubSaved に移行
+  4. pollBuildStatus(commitSha) をバックグラウンドで起動（Actions監視）
   ↓ デバイス接続中
-  3. GetKeymap RPC で実機の behaviorId を取得
-  4. GitHub バインディングと照合して behavior名→ID マップ構築
-  5. SetLayerBinding RPC で各変更キーを書き込み
-  6. 完了
+  5. GetKeymap RPC で実機の behaviorId を取得
+  6. buildBehIdMap() で behavior名→ID マップ構築（param完全一致・矛盾除外）
+  7. SetLayerBinding RPC で各変更キーを書き込み
+  8. 完了
 ```
 
 デバイス未接続時: GitHub push のみ実行し、接続後に「再度保存ボタン」で実機書き込み。
@@ -121,83 +160,108 @@ ZMKファームウェアを使う自作キーボードのキーマップを、We
 - 切断ボタン
 - 接続状態インジケーター（緑/灰ドット）
 
-#### 実機からの逆読み込み（GetLayerBindings 相当）
+#### 実機からの逆読み込み（Task 2）
 - 「📥 実機」ボタンで GetKeymap RPC 送信
 - 全レイヤー・全キーの behaviorId/param1/param2 を取得
-- GitHub の binding 文字列と値レベルで照合（一致すれば GitHub 表記を保持）
-- 差分があれば `S.edits` に記録し、「保存 (GitHub + 実機)」で反映可能
-- 実機と GitHub の一致/不一致をログに表示
+- GitHub の binding 文字列と値レベルで照合
+- 差分があれば **差分パネル** を表示（レイヤー・キー位置・GitHub値・実機値・適用可否）
+
+**差分パネルの操作:**
+- 「⬇ GitHubを実機に適用」→ `applyGithubToDevice()`:
+  1. GetKeymap で最新の behaviorId を再取得
+  2. `buildBehIdMap()` で behavior名→ID マップ構築
+  3. 適用可能な差分キーに SetLayerBinding で GitHub 値を書き込み
+  4. 適用後 GetKeymap で再検証 → 不一致キーはログ警告＋差分パネルに残す
+  5. 適用不可キーには4ステップの案内を表示
+- 「⬆ 実機をGitHubに反映」→ S.edits に記録し、保存ボタンで GitHub push 可能
+- 「閉じる」
+
+**`applyGithubToDevice` 適用不可の案内（修正C）:**
+```
+1. 未保存の変更がすべてGitHubに保存済みであることを確認
+2. GitHubソースからビルドし、生成されたファームウェアを手動でフラッシュ
+3. ZMK Studioまたは本アプリから Restore Stock Settings（設定リセット）を実行
+   ※実機のRPC変更はすべて消えます。手順1の確認が必須です
+4. 本アプリの逆読み込みで実機とGitHubの一致を確認
+```
+
+#### behavior名→IDマップ: `buildBehIdMap()`（修正A）
+- **学習条件**: GitHub の originalBindings と実機 GetKeymap の両者で `param1` AND `param2` が完全一致するキー位置のみ
+- **矛盾除外**: 同一 behavior 名が複数の異なる ID に対応する場合はそのエントリを除外（1名前↔1ID の単射を強制）
+- **reason フィールド**: `canApply=false` のキーに「behavior ID 未確定」「behavior ID 未確定（矛盾）」「未対応構文」を区別表示
+- `loadFromDevice()`・`writeToDevice()`・`applyGithubToDevice()` の3箇所で共通使用
+
+#### GitHub Actions ビルド監視（Task 4・修正E）
+
+**ポーリング設計:**
+- `pollBuildStatus(headSha)`: push後に呼ぶ。`head_sha` 指定で run 検索（10秒×10回=最大100秒）→ 20秒間隔ポーリング（最大15分）
+- `_pollRunLoop(runId, pollOwner, pollRepo, token)`: 単一 run をポーリングする内部ループ（`owner`/`repo` をキャプチャ）
+- `checkAndResumeBuild()`: KB切り替え後に最新 run を1回確認 → 進行中なら追跡再開
+
+**キャンセルトークン（修正E）:**
+- `S.buildPollToken` を整数カウンター（インクリメントで全実行中ポーラーを一括無効化）
+- KB 切り替え時: `++S.buildPollToken` → 旧ポーラーが次の await チェックで即終了 → `checkAndResumeBuild()` で新 KB のビルド状態を確認
+
+**ビルドロック:**
+- `setBuildLock(locked)`: `btn-save`/`btn-write-device` を `disabled`、`keyboard-canvas` を `pointer-events:none + opacity:0.65`
+- Actions 未設定リポジトリ: run 未検出でロック自動解除＋「ビルド設定なし」ログ
+
+**ステータスバッジ（action bar 内）:**
+- `⏳ ビルド開始待ち` / `⏳ ビルド待機中`（グレー）
+- `⚙ ビルド中`（ブルー）
+- `✓ ビルド成功`（グリーン）
+- `✗ ビルド失敗`（レッド）
+
+**ビルド失敗時:** Actions ログ URL をログ表示＋「再保存でリトライ」案内（自動リトライなし）
 
 #### コンボ編集
 - `.keymap` 内の `combos { }` セクションをパース
 - コンボの追加・編集・削除 UI
 - `reconstructWithCombos()` で keymap に反映 → 保存ボタンで GitHub push
-- **注意**: コンボは GitHub push のみ（実機への即時書き込みは未対応）
+- **注意**: コンボは GitHub push のみ（実機への即時書き込みは RPC 非対応）
 
-#### キーマップの再構築
-- `reconstructKeymap()`: 変更済みレイヤーの bindings を元のテキストに置換
-- 1行1バインディング形式でフォーマット
-- sensor-bindings は誤判定しないよう除外
+---
 
-#### RPC 実装詳細
-- `encodeFrame()` / `FrameDecoder` — フレームエンコード・デコード
-- `buildSetLayerBinding()` — 手書き Protobuf エンコーダ
-- `buildGetKeymapRequest()` — GetKeymap リクエスト構築
-- `parseGetKeymapResponse()` — 3層ネスト Protobuf デコーダ
-- `parseZmkKeycode()` — `LC(X)` 等のネスト修飾子対応キーコードパーサ
-- `parseBindingForRpc()` — バインディング文字列 → {beh, p1, p2} 変換
-- `deviceBindingToString()` — 実機の {behaviorId, p1, p2} → ZMK binding 文字列変換
-- ステール応答検出（requestId の単調増加管理）
-
-### 3-2. 未実装・残課題
-
-#### Phase 2 残り
-- **WebBluetooth 接続** — WebSerial のみ実装済み。BLE対応なし
-- **GitHub Actions ビルドステータス表示** — push 後の Actions 結果をポーリングして UI に表示する機能なし（ログに URL を出すだけ）
-- **OAuth 認証** — PAT 方式で代替中。OAuth App 未登録のまま
-
-#### Phase 3（未着手）
-- キーの視覚的編集UI は基本実装済みだが、Phase 3 の要件として残るもの:
-  - `&mo`, `&to`, `&tog` ビヘイビアのモーダル内 UI（現在 `&lt` で代替可能だが専用UIなし）
-  - hold-tap の詳細パラメータ設定（`tapping-term-ms` 等の per-binding 設定）
+### 4-2. 未実装・残課題
 
 #### Phase 4（未着手）
 - `.conf` ファイルの読み込みと未作成ビヘイビア一覧表示
 - ビヘイビア専用作成画面（`.conf` への追記）
 - ビヘイビア解説ページ
 
-#### Phase 5（未着手）
-- ビルドステータス表示（GitHub Actions 結果のリアルタイム表示）
-- エラー通知・リトライ案内
-- iOS 向けブラウザ案内
-
 #### 技術的な既知の制約
 - `&mo`, `&to`, `&tog` はキー編集モーダルにボタンがない（直接テキスト入力欄で入力は可能）
-- GetKeymap の Protobuf レスポンスは `wire 1/5`（64bit/32bit）に未対応（停止する）
 - コンボの実機即時書き込みは未対応（GitHub push のみ）
 - BLE（WebBluetooth）接続は未実装
-- `behaviors` Protobuf フィールド（field4）は未使用
+- `behaviors` Protobuf サブシステム（`ListAllBehaviors`等）は未実装（→ E-3 参照）
+- アプリ初回ロード時（ページリロード後）はビルド状態を復元しない
+- `checkAndResumeBuild` は `per_page=1`（最新1件）取得のため、別ワークフロー（lint等）の run を誤追跡する可能性がある
 
 ---
 
-## 4. ファイル構成
+## 5. ファイル構成
 
 ```
 zmk-keymap-sync/
-├── CLAUDE.md              # Claude Code 指示書（開発ルール）
+├── CLAUDE.md                          # Claude Code 指示書（開発ルール）
 ├── README.md
 ├── docs/
-│   ├── requirements.md    # 要件定義書
-│   └── handover.md        # 本ファイル
+│   ├── requirements.md                # 要件定義書（Task 0 で更新済み）
+│   ├── handover.md                    # 本ファイル
+│   └── reports/
+│       ├── report_20260704.md         # チェックポイント1（Task 0-2）
+│       ├── report_20260704_addendum.md # 修正A-C 追記レポート
+│       ├── report_20260704_cp2.md     # チェックポイント2（Task 3-4）
+│       └── report_20260704_de.md      # 修正D・E 追記レポート
 ├── app/
-│   └── index.html         # 本番アプリ（全実装を1ファイルに収容）
+│   └── index.html                     # 本番アプリ（全実装を1ファイルに収容）
 └── test/
-    └── t1_verification.html  # T-1検証用（参考用・変更不要）
+    └── t1_verification.html           # T-1検証用（参考用・変更不要）
 ```
 
 ---
 
-## 5. 起動方法
+## 6. 起動方法
 
 ```powershell
 # app/ ディレクトリに静的サーバーを立てる
@@ -211,9 +275,12 @@ npx serve app
 
 ---
 
-## 6. 作業ルール（CLAUDE.md より）
+## 7. 作業ルール（CLAUDE.md より）
 
+- `app/index.html` の単一ファイル構成を維持（外部ライブラリ追加禁止）
+- 既存機能を壊さない。大規模リファクタリング禁止。差分は最小限に
 - ビルドエラー自動修正の上限: 最大3回
+- 各タスク完了ごとに個別コミット（メッセージにタスク番号を含める）
 - 作業完了後の必須手順: `git add → commit → push → gh run list --limit 3` でビルド確認
 - ビルド確認方法: `gh run list --limit 3` のみ（`gh run watch` は使用禁止）
 - push 後 5分待機してからビルド確認
@@ -221,16 +288,24 @@ npx serve app
 
 ---
 
-## 7. 次の優先タスク（提案）
+## 8. コミット履歴（2026-07-04 時点）
 
-1. **`&mo` / `&to` / `&tog` のモーダル UI 追加** — よく使うビヘイビアなので優先度高
-2. **GitHub Actions ビルドステータス表示** — push 後に Actions の結果をポーリングして表示
-3. **WebBluetooth 接続対応** — iOS 利用のため必要
-4. **Phase 4: `.conf` 読み込みと未作成ビヘイビア表示**
+```
+df3c4d9 docs: 修正D・E 追記レポートを追加
+4f0501f feat(修正D+E): SHA競合モーダル・ビルドポーラーのKB切り替え対応
+0ccf03c docs: チェックポイント2レポートを追加 (Task 3-4 完了)
+5b76d42 feat(Task 4): GitHub Actionsビルドステータス表示・ビルド中編集ロックを実装
+4502eb9 feat(Task 3): SHA競合対策・beforeunload 離脱警告を追加
+1561e99 fix(修正A-C): behavior IDマップ堅牢化・適用後再検証・案内文4ステップ化
+795f8e9 docs: チェックポイント1レポートを追加 (Task 0-2 完了)
+98142d3 feat(Task 2): GitHub to 実機の差分RPC適用UI を実装
+ee5be66 fix(Task 1): Protobufデコーダに未知フィールドのスキップ処理を追加
+474c2ea docs(Task 0): requirements.md にRPC/settingsパーティションの仕様を反映
+```
 
 ---
 
-## 8. 将来候補タスク（E系）
+## 9. 将来候補タスク（E系）
 
 現行スコープ外だが、技術的に価値がある改善候補。
 
@@ -244,9 +319,8 @@ npx serve app
 
 **現状の課題:**
 `buildBehIdMap()` は「GitHub の originalBindings と実機の GetKeymap 結果を位置照合し、
-param1/param2 が完全一致するキーのみから behavior 名→ID マップを学習する」という推論的手法を採用している。
-照合できるキーが少ない（差分が多い初期状態）場合や、全キーが差分になった場合は
-マップが空になり適用不可が増える。
+param1/param2 が完全一致するキーのみから behavior 名→ID マップを学習する」という推論的手法。
+差分が多い初期状態では照合できるキーが少なく、適用不可が増える可能性がある。
 
 **解決策:**
 ZMK Studio RPC の `behaviors` サブシステム（`ListAllBehaviors` 等）を使うと、
@@ -254,7 +328,6 @@ ZMK Studio RPC の `behaviors` サブシステム（`ListAllBehaviors` 等）を
 これにより推論を廃止し、確実な mapping が得られる。
 
 **なぜ今やらないか:**
-behaviors サブシステムの RPC フォーマットは未実装・未調査であり、
-実装コストが高い。現行の推論的手法は「param まで一致する位置のみ学習」
-「矛盾する名前は除外（1名前↔1ID の単射）」という安全弁を持っており、
-実用上は十分と判断している。
+behaviors サブシステムの RPC フォーマットは未実装・未調査であり、実装コストが高い。
+現行の推論的手法は「param まで一致する位置のみ学習」「矛盾する名前は除外（1名前↔1ID の単射）」
+という安全弁を持っており、実用上は十分と判断している。
