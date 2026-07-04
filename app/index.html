@@ -1243,14 +1243,23 @@ function nextRpcReqId() {
 }
 
 async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
-  const { port } = S.transport;
-  const writer   = port.writable.getWriter();
-  const reader   = port.readable.getReader();
+  const transport = S.transport; // 切断でS.transportがnullになっても参照を保持
+  const { port }  = transport;
+
+  // 書き込みフェーズ: 必ずwriter.releaseLock()が呼ばれるよう独立したtry/finally
+  const writer = port.writable.getWriter();
+  try {
+    await writer.write(packet);
+  } finally {
+    writer.releaseLock();
+  }
+
+  // 読み取りフェーズ: activeReaderをtransportに登録し切断ハンドラからcancel可能にする
+  const reader = port.readable.getReader();
+  transport.activeReader = reader;
   const decoder  = new FrameDecoder();
   let totalBytes = 0;
   try {
-    await writer.write(packet);
-    writer.releaseLock();
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const TIMEOUT = Symbol();
@@ -1258,7 +1267,7 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
         reader.read(),
         new Promise(r => setTimeout(() => r({ done: false, value: TIMEOUT }), 300)),
       ]);
-      if (done) break;
+      if (done) break; // port.close() または reader.cancel() で終了
       if (value === TIMEOUT) continue;
       totalBytes += value.length;
       const frames = decoder.push(value);
@@ -1270,20 +1279,18 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
             continue;
           }
         }
-        reader.releaseLock();
-        return frame;
+        return frame; // finally でreleaseLock
       }
     }
-    reader.releaseLock();
     if (totalBytes === 0) {
       log('  診断: 受信バイト数=0 → デバイスが応答していません（ZMK Studio RPC が有効か確認してください）', 'log-warn');
     } else {
       log(`  診断: 受信バイト数=${totalBytes} → データは来ていますがフレームが解釈できません`, 'log-warn');
     }
     return null;
-  } catch (err) {
+  } finally {
+    transport.activeReader = null;
     try { reader.releaseLock(); } catch (_) {}
-    throw err;
   }
 }
 
@@ -1549,7 +1556,7 @@ document.getElementById('btn-serial').addEventListener('click', async () => {
     if (!navigator.serial) throw new Error('WebSerial 非対応（Chrome/Edge が必要です）');
     const port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
-    S.transport = { type: 'serial', port };
+    S.transport = { type: 'serial', port, activeReader: null };
     setDevStatus(true, 'USB Serial 接続中');
     document.getElementById('btn-serial').classList.add('hidden');
     document.getElementById('btn-disconnect').classList.remove('hidden');
@@ -1564,8 +1571,18 @@ document.getElementById('btn-serial').addEventListener('click', async () => {
 
 document.getElementById('btn-disconnect').addEventListener('click', async () => {
   if (!S.transport) return;
-  try { await S.transport.port.close(); } catch (_) {}
-  S.transport = null;
+  const transport = S.transport;
+  S.transport = null; // 先にnullにしてRPC新規発行を防ぐ
+
+  // serialRpcがreader lockを保持中の場合、cancel()でread()を完了させてからclose()できるようにする
+  if (transport.activeReader) {
+    try { await transport.activeReader.cancel(); } catch (_) {}
+  }
+
+  // cancel()後、finallyでreleaseLock()が走るまでわずかに待つ
+  await new Promise(r => setTimeout(r, 50));
+  try { await transport.port.close(); } catch (_) {}
+
   setDevStatus(false, 'デバイス 未接続');
   document.getElementById('btn-serial').classList.remove('hidden');
   document.getElementById('btn-disconnect').classList.add('hidden');
