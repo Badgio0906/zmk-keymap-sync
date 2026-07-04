@@ -1247,6 +1247,7 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
   const writer   = port.writable.getWriter();
   const reader   = port.readable.getReader();
   const decoder  = new FrameDecoder();
+  let totalBytes = 0;
   try {
     await writer.write(packet);
     writer.releaseLock();
@@ -1259,6 +1260,7 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
       ]);
       if (done) break;
       if (value === TIMEOUT) continue;
+      totalBytes += value.length;
       const frames = decoder.push(value);
       for (const frame of frames) {
         if (expectedReqId !== null) {
@@ -1273,6 +1275,11 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
       }
     }
     reader.releaseLock();
+    if (totalBytes === 0) {
+      log('  診断: 受信バイト数=0 → デバイスが応答していません（ZMK Studio RPC が有効か確認してください）', 'log-warn');
+    } else {
+      log(`  診断: 受信バイト数=${totalBytes} → データは来ていますがフレームが解釈できません`, 'log-warn');
+    }
     return null;
   } catch (err) {
     try { reader.releaseLock(); } catch (_) {}
