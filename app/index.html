@@ -463,8 +463,8 @@
     <button class="btn-ghost" id="btn-reload" style="font-size:0.75rem">↻ GitHub</button>
     <button class="btn-ghost hidden" id="btn-read-device" style="font-size:0.75rem">📥 実機</button>
     <div style="width:1px;height:18px;background:var(--border);margin:0 4px"></div>
-    <button class="btn-ghost hidden" id="btn-combo" style="font-size:0.75rem">🔗 コンボ編集</button>
-    <button class="btn-ghost hidden" id="btn-write-device" style="font-size:0.75rem">⚡ 実機に書き込み</button>
+    <button class="btn-ghost" id="btn-combo" style="font-size:0.75rem" disabled>🔗 コンボ編集</button>
+    <button class="btn-ghost" id="btn-write-device" style="font-size:0.75rem" disabled>⚡ 実機に書き込み</button>
     <div class="spacer"></div>
     <span class="change-badge hidden" id="change-badge"></span>
     <button class="btn-success hidden" id="btn-save">💾 保存 (GitHub + 実機)</button>
@@ -1547,7 +1547,8 @@ document.getElementById('btn-serial').addEventListener('click', async () => {
     document.getElementById('btn-serial').classList.add('hidden');
     document.getElementById('btn-disconnect').classList.remove('hidden');
     document.getElementById('btn-read-device').classList.remove('hidden');
-    document.getElementById('btn-write-device').classList.remove('hidden');
+    document.getElementById('btn-write-device').disabled = false;
+    if (S.layers.length > 0) document.getElementById('btn-combo').disabled = false;
     log('Serial 接続完了', 'log-ok');
   } catch (err) {
     log(`Serial エラー: ${err.message}`, 'log-error');
@@ -1562,7 +1563,8 @@ document.getElementById('btn-disconnect').addEventListener('click', async () => 
   document.getElementById('btn-serial').classList.remove('hidden');
   document.getElementById('btn-disconnect').classList.add('hidden');
   document.getElementById('btn-read-device').classList.add('hidden');
-  document.getElementById('btn-write-device').classList.add('hidden');
+  document.getElementById('btn-write-device').disabled = true;
+  document.getElementById('btn-combo').disabled = true;
   log('切断しました', 'log-warn');
 });
 
@@ -2528,7 +2530,7 @@ async function loadData() {
     renderLayerTabs();
     renderKeyboard();
     updateChangeBadge();
-    document.getElementById('btn-combo').classList.remove('hidden');
+    if (S.transport) document.getElementById('btn-combo').disabled = false;
 
   } catch (err) {
     setGhStatus(false);
