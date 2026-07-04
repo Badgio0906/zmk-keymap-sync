@@ -1246,10 +1246,17 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
   const transport = S.transport; // 切断でS.transportがnullになっても参照を保持
   const { port }  = transport;
 
+  // G-1: 送信データの hex ダンプ
+  const sentHex = Array.from(packet).map(b => b.toString(16).padStart(2,'0')).join(' ');
+  log(`  送信データ(hex): ${sentHex}`, 'log-info');
+
   // 書き込みフェーズ: 必ずwriter.releaseLock()が呼ばれるよう独立したtry/finally
   const writer = port.writable.getWriter();
   try {
     await writer.write(packet);
+  } catch (writeErr) {
+    log(`  送信エラー: ${writeErr.message}`, 'log-error');
+    throw writeErr;
   } finally {
     writer.releaseLock();
   }
@@ -1258,7 +1265,7 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
   const reader = port.readable.getReader();
   transport.activeReader = reader;
   const decoder  = new FrameDecoder();
-  let totalBytes = 0;
+  const rawBytes = []; // G-1: 受信バイトを蓄積（タイムアウト時のhexダンプ用）
   try {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -1269,7 +1276,7 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
       ]);
       if (done) break; // port.close() または reader.cancel() で終了
       if (value === TIMEOUT) continue;
-      totalBytes += value.length;
+      for (const b of value) rawBytes.push(b);
       const frames = decoder.push(value);
       for (const frame of frames) {
         if (expectedReqId !== null) {
@@ -1282,10 +1289,14 @@ async function serialRpc(packet, timeoutMs = 3000, expectedReqId = null) {
         return frame; // finally でreleaseLock
       }
     }
-    if (totalBytes === 0) {
-      log('  診断: 受信バイト数=0 → デバイスが応答していません（ZMK Studio RPC が有効か確認してください）', 'log-warn');
+    // G-1: タイムアウト時の診断出力
+    if (rawBytes.length === 0) {
+      log('  診断: 受信データなし — デバイスが応答していません（ZMK Studio RPC が有効か確認してください）', 'log-warn');
     } else {
-      log(`  診断: 受信バイト数=${totalBytes} → データは来ていますがフレームが解釈できません`, 'log-warn');
+      const cap = rawBytes.slice(0, 64);
+      const hex = cap.map(b => b.toString(16).padStart(2,'0')).join(' ');
+      log(`  診断: 受信バイト数=${rawBytes.length}、フレーム解釈失敗`, 'log-warn');
+      log(`  受信生データ(hex): ${hex}${rawBytes.length > 64 ? ' ...' : ''}`, 'log-warn');
     }
     return null;
   } finally {
@@ -1649,8 +1660,12 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     if (S.transport) {
       btn.textContent = '実機に書き込み中...';
       log('実機に書き込み中（GitHub push 前）...', 'log-info');
-      await writeToDevice();
-      log('✓ 実機書き込み完了', 'log-ok');
+      const writeResult = await writeToDevice();
+      if (writeResult?.ok) {
+        log('✓ 実機書き込み完了', 'log-ok');
+      } else {
+        log('⚠ 実機書き込み未実施（キーマップ読み取り失敗）', 'log-warn');
+      }
     } else {
       log('⚠ デバイス未接続 — GitHub push 後、接続して「実機に書き込み」で反映できます', 'log-warn');
     }
@@ -1700,7 +1715,7 @@ async function writeToDevice() {
 
   if (!gmResp) {
     log('GetKeymap タイムアウト — 実機書き込みをスキップします', 'log-warn');
-    return;
+    return { ok: false };
   }
 
   const deviceBindings = parseGetKeymapResponse(gmResp);
@@ -1710,7 +1725,7 @@ async function writeToDevice() {
     const hex = Array.from(gmResp.slice(0, 32)).map(b => b.toString(16).padStart(2,'0')).join(' ');
     log(`  raw[0..32]: ${hex}`, 'log-warn');
     log('⚠ パース結果が空です。実機書き込みをスキップします', 'log-warn');
-    return;
+    return { ok: false };
   }
 
   // 2. behavior 名→ID マップを構築（originalBindings と実機の一致位置のみ・矛盾除外）
@@ -1741,7 +1756,7 @@ async function writeToDevice() {
 
   if (diffs.length === 0) {
     log('実機はGitHubと一致しています（書き込み不要）', 'log-ok');
-    return;
+    return { ok: true };
   }
 
   // 4. 差分キーを書き込む
@@ -1759,6 +1774,7 @@ async function writeToDevice() {
   }
 
   log(`書き込み完了 — ${written} 件成功 / ${skipped} 件スキップ`, written > 0 ? 'log-ok' : 'log-warn');
+  return { ok: true };
 }
 
 // ─────────────────────────────────────────────
@@ -2299,8 +2315,12 @@ document.getElementById('btn-write-device').addEventListener('click', async () =
 
   try {
     log('実機に書き込み中...', 'log-info');
-    await writeToDevice();
-    log('✓ 実機書き込み完了', 'log-ok');
+    const writeResult = await writeToDevice();
+    if (writeResult?.ok) {
+      log('✓ 実機書き込み完了', 'log-ok');
+    } else {
+      log('⚠ 実機書き込み未実施（キーマップ読み取り失敗）', 'log-warn');
+    }
   } catch (err) {
     log(`実機書き込みエラー: ${err.message}`, 'log-error');
   } finally {
