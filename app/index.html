@@ -339,6 +339,39 @@
     .hdr-toggle:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
     .hdr-toggle.active { background: var(--accent-bg); color: var(--accent); }
 
+    /* ─── Q: キーボード + ステータスパネル ─── */
+    .kb-layout-row { display: flex; gap: 10px; align-items: flex-start; }
+    .kb-column { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+    .status-panel {
+      width: 190px; flex-shrink: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    @media (max-width: 720px) {
+      .kb-layout-row { flex-direction: column; }
+      .status-panel { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+      .sp-section { flex: 1; min-width: 120px; }
+    }
+    .sp-section { display: flex; flex-direction: column; gap: 4px; }
+    .sp-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+    .sp-label {
+      font-size: 0.63rem; color: var(--muted); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .sp-row { display: flex; align-items: center; gap: 5px; }
+    .sp-sync-badge {
+      font-size: 0.78rem; font-weight: 600;
+      padding: 4px 8px; border-radius: 8px; display: inline-block; line-height: 1.4;
+    }
+    .sp-sync-badge.sync-ok   { background: rgba(63,185,80,0.10);  color: var(--green);  border: 1px solid rgba(63,185,80,0.25); }
+    .sp-sync-badge.sync-diff { background: rgba(210,153,34,0.10); color: var(--yellow); border: 1px solid rgba(210,153,34,0.25); cursor: pointer; }
+    .sp-sync-badge.sync-diff:hover { filter: brightness(1.2); }
+    .sp-sync-badge.sync-disc { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .sp-datasource { font-size: 0.76rem; line-height: 1.55; white-space: pre-line; }
+    .sp-datasource.ds-device { color: var(--green); }
+    .sp-datasource.ds-github { color: var(--accent); }
     /* ─── O-4: リサイズハンドル ─── */
     .resize-handle {
       height: 5px; cursor: ns-resize; border-radius: 3px;
@@ -529,15 +562,6 @@
 
   <div style="flex:1"></div>
 
-  <!-- デバイス接続状態 -->
-  <div class="status-item">
-    <span class="dot dot-gray" id="dev-dot"></span>
-    <span class="status-label" id="dev-status">デバイス 未接続</span>
-  </div>
-
-  <!-- 同期ステータスバッジ (M-2) -->
-  <div id="sync-badge" class="sync-badge sync-disc">⊘ 実機未接続</div>
-
   <!-- テーマ切替 (O-2) -->
   <div class="hdr-toggle-group" id="theme-group" title="カラーテーマ">
     <button class="hdr-toggle" data-theme-btn="dark"  title="ダーク">🌑</button>
@@ -564,30 +588,63 @@
     <span class="layer-tabs-label">Layer:</span>
   </div>
 
-  <!-- データソースバッジ (M-1) -->
-  <div id="datasource-badge" class="datasource-badge hidden"></div>
+  <!-- キーボード列 + ステータスパネル (Q) -->
+  <div class="kb-layout-row">
+    <!-- キーボード列 -->
+    <div class="kb-column">
+      <!-- キーボードキャンバス -->
+      <div class="keyboard-card">
+        <div class="keyboard-canvas" id="keyboard-canvas">
+          <div style="color:var(--muted);font-size:0.85rem;padding:20px 0">
+            PAT を設定してキーマップを読み込んでください
+          </div>
+        </div>
+      </div>
 
-  <!-- キーボードキャンバス -->
-  <div class="keyboard-card">
-    <div class="keyboard-canvas" id="keyboard-canvas">
-      <div style="color:var(--muted);font-size:0.85rem;padding:20px 0">
-        PAT を設定してキーマップを読み込んでください
+      <!-- アクションバー -->
+      <div class="action-bar">
+        <span style="font-size:0.72rem;color:var(--muted);margin-right:2px">読み込み元:</span>
+        <button class="btn-ghost" id="btn-reload" style="font-size:0.75rem">↻ GitHub</button>
+        <button class="btn-ghost hidden" id="btn-read-device" style="font-size:0.75rem">📥 実機</button>
+        <div style="width:1px;height:18px;background:var(--border);margin:0 4px"></div>
+        <button class="btn-ghost" id="btn-combo" style="font-size:0.75rem" disabled>🔗 コンボ編集</button>
+        <button class="btn-ghost" id="btn-write-device" style="font-size:0.75rem" disabled>⚡ 実機に書き込み</button>
+        <div class="spacer"></div>
+        <span class="change-badge hidden" id="change-badge"></span>
+        <button class="btn-success hidden" id="btn-save">💾 保存 (GitHub + 実機)</button>
       </div>
     </div>
-  </div>
 
-  <!-- アクションバー -->
-  <div class="action-bar">
-    <span style="font-size:0.72rem;color:var(--muted);margin-right:2px">読み込み元:</span>
-    <button class="btn-ghost" id="btn-reload" style="font-size:0.75rem">↻ GitHub</button>
-    <button class="btn-ghost hidden" id="btn-read-device" style="font-size:0.75rem">📥 実機</button>
-    <div style="width:1px;height:18px;background:var(--border);margin:0 4px"></div>
-    <button class="btn-ghost" id="btn-combo" style="font-size:0.75rem" disabled>🔗 コンボ編集</button>
-    <button class="btn-ghost" id="btn-write-device" style="font-size:0.75rem" disabled>⚡ 実機に書き込み</button>
-    <div class="spacer"></div>
-    <span class="change-badge hidden" id="change-badge"></span>
-    <button class="btn-success hidden" id="btn-save">💾 保存 (GitHub + 実機)</button>
-    <span class="hidden" id="build-status"></span>
+    <!-- ステータスパネル (Q) -->
+    <aside class="status-panel">
+      <!-- 同期状態 -->
+      <div class="sp-section">
+        <div class="sp-label">同期状態</div>
+        <div id="sync-badge" class="sp-sync-badge sync-disc">⊘ 実機未接続</div>
+      </div>
+      <hr class="sp-divider">
+      <!-- USB接続 -->
+      <div class="sp-section">
+        <div class="sp-label">USB接続</div>
+        <div class="sp-row">
+          <span class="dot dot-gray" id="dev-dot"></span>
+          <span id="dev-status" style="font-size:0.76rem;color:var(--text)">デバイス 未接続</span>
+        </div>
+      </div>
+      <hr class="sp-divider">
+      <!-- 表示中データ (M-1) -->
+      <div class="sp-section">
+        <div class="sp-label">表示中データ</div>
+        <div id="datasource-badge" class="sp-datasource">—</div>
+      </div>
+      <hr class="sp-divider">
+      <!-- ビルド (ビルド中のみ表示) -->
+      <div class="sp-section hidden" id="sp-build-section">
+        <hr class="sp-divider" style="margin-bottom:8px">
+        <div class="sp-label">ビルド</div>
+        <span id="build-status" style="font-size:0.74rem"></span>
+      </div>
+    </aside>
   </div>
 
   <!-- 差分パネル（実機/GitHub 差分） -->
@@ -596,14 +653,23 @@
       実機 / GitHub 差分
       <span id="diff-summary" style="font-size:0.72rem;color:var(--muted);font-weight:normal;"></span>
     </h3>
+    <!-- O-6改: 方向説明 -->
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px;display:flex;gap:18px;flex-wrap:wrap">
+      <span>⬇ = GitHubの値で実機を上書き</span>
+      <span>⬆ = 実機の値をGitHubへ保存</span>
+    </div>
     <div style="overflow-x:auto;max-height:260px;overflow-y:auto">
       <table class="diff-table">
         <thead>
           <tr>
             <th>レイヤー</th>
             <th>キー位置</th>
-            <th title="GitHubリポジトリに保存されているバインディング">GitHub の値</th>
-            <th title="実機から読み取ったバインディング">実機の値</th>
+            <th title="GitHubリポジトリに保存されているバインディング — ⬇ GitHubを実機に適用 の元になる値">
+              GitHub の値 <span style="font-weight:400;font-size:0.68rem;color:var(--muted)">(保存済)</span>
+            </th>
+            <th title="実機から読み取ったバインディング — ⬆ 実機をGitHubに反映 の元になる値">
+              実機の値 <span style="font-weight:400;font-size:0.68rem;color:var(--muted)">(現在動作中)</span>
+            </th>
             <th>状態</th>
           </tr>
         </thead>
@@ -1423,37 +1489,36 @@ function updateChangeBadge() {
 // データソースバッジ (M-1) / 同期ステータスバッジ (M-2)
 // ─────────────────────────────────────────────
 function updateDataSourceBadge() {
-  const badge = document.getElementById('datasource-badge');
-  if (!badge) return;
-  if (!S.dataSource) { badge.classList.add('hidden'); return; }
-
+  const el = document.getElementById('datasource-badge');
+  if (!el) return;
+  // Q: ステータスパネル内の sp-datasource 要素に表示（hidden なし）
   const editCount = Object.keys(S.edits).length;
-  badge.classList.remove('hidden', 'ds-device', 'ds-github');
+  el.className = 'sp-datasource';
+
+  if (!S.dataSource) { el.textContent = '—'; return; }
 
   let text;
   if (S.dataSource.type === 'device') {
-    if (editCount > 0) {
-      text = '表示中: 実機+編集中';
-    } else {
-      const t = S.dataSource.at;
-      const hms = [t.getHours(), t.getMinutes(), t.getSeconds()].map(n => n.toString().padStart(2, '0')).join(':');
-      text = `表示中: 実機(最終読込 ${hms})`;
-    }
-    badge.classList.add('ds-device');
+    const t = S.dataSource.at;
+    const hms = [t.getHours(), t.getMinutes(), t.getSeconds()].map(n => n.toString().padStart(2, '0')).join(':');
+    text = `実機\n(${hms} 読込)`;
+    if (editCount > 0) text += `\n+編集中 ${editCount}件`;
+    el.classList.add('ds-device');
   } else {
     const branch = (S.kb && S.kb.branch) ? S.kb.branch : 'main';
-    text = `表示中: GitHub(${branch})`;
-    if (editCount > 0) text += ` +未保存の編集${editCount}件`;
-    badge.classList.add('ds-github');
+    text = `GitHub\n(${branch})`;
+    if (editCount > 0) text += `\n未保存 ${editCount}件`;
+    el.classList.add('ds-github');
   }
-  badge.textContent = text;
+  el.textContent = text;
 }
 
 function updateSyncBadge() {
   const badge = document.getElementById('sync-badge');
   if (!badge) return;
   badge.onclick = null;
-  badge.className = 'sync-badge';
+  // Q: sp-sync-badge を保持しつつ状態クラスだけ切替
+  badge.className = 'sp-sync-badge';
 
   if (!S.transport) {
     badge.classList.add('sync-disc');
@@ -1470,10 +1535,10 @@ function updateSyncBadge() {
   const uc = S.unparsableItems.length;
   if (dc === 0) {
     badge.classList.add('sync-ok');
-    badge.textContent = uc > 0 ? `✓ 一致 (解析不能${uc}件)` : '✓ 実機とGitHubは一致';
+    badge.textContent = uc > 0 ? `✓ 一致 (解析不能${uc}件)` : '✓ 実機とGitHub一致';
   } else {
     badge.classList.add('sync-diff');
-    badge.textContent = `⚠ 差分${dc}件`;
+    badge.textContent = `⚠ 差分 ${dc}件`;
     badge.onclick = () => document.getElementById('diff-panel').classList.remove('hidden');
   }
 }
@@ -2246,6 +2311,8 @@ function showBuildStatus(state, text) {
   const el = document.getElementById('build-status');
   el.className = `bs-${state}`;
   el.textContent = text;
+  // Q: ビルドセクションを表示
+  document.getElementById('sp-build-section')?.classList.remove('hidden');
 }
 
 // 単一runをポーリング（tokenが変わったら即座に終了）
@@ -2327,6 +2394,7 @@ async function pollBuildStatus(headSha) {
   if (!runId) {
     log('ビルド設定なし（Actionsワークフローが検出されませんでした） — 通常操作を継続します', 'log-info');
     document.getElementById('build-status').classList.add('hidden');
+    document.getElementById('sp-build-section')?.classList.add('hidden');
     setBuildLock(false);
     return;
   }
@@ -2346,6 +2414,7 @@ async function checkAndResumeBuild() {
     const run = data.workflow_runs?.[0];
     if (!run || run.status === 'completed') {
       document.getElementById('build-status').classList.add('hidden');
+      document.getElementById('sp-build-section')?.classList.add('hidden');
       return;
     }
     log(`KB ${owner}/${repo} にアクティブなビルドを検出 (run #${run.id}) — 追跡を再開します`, 'log-info');
@@ -2356,6 +2425,7 @@ async function checkAndResumeBuild() {
   } catch (e) {
     if (token !== S.buildPollToken) return;
     document.getElementById('build-status').classList.add('hidden');
+    document.getElementById('sp-build-section')?.classList.add('hidden');
   }
 }
 
