@@ -972,42 +972,83 @@ function parseBindings(text) {
 }
 
 // ─────────────────────────────────────────────
-// 保存前構文バリデーション (N-3)
+// 保存前構文バリデーション (N-3 再設計 S-2/S-3/S-5)
 // ─────────────────────────────────────────────
+
+// S-3: ブレース対応でブロック内容を抽出
+function extractBlock(text, keyword) {
+  const re = new RegExp('\\b' + keyword + '\\b\\s*\\{');
+  const m = text.match(re);
+  if (!m) return null;
+  const start = text.indexOf('{', m.index + m[0].length - 1);
+  if (start === -1) return null;
+  let depth = 0, i = start;
+  while (i < text.length) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') { depth--; if (depth === 0) return text.slice(start + 1, i); }
+    i++;
+  }
+  return null;
+}
+
 function validateKeymap(content, originalLayers) {
   const errors = [];
 
-  // 1. < > 対応チェック
-  const openCount  = (content.match(/(?<![a-z-])bindings\s*=\s*</g) || []).length;
-  const closeCount = (content.match(/>;/g) || []).length;
-  if (openCount !== closeCount) {
-    errors.push(`< > 対応不一致 — bindings=${openCount} / >;=${closeCount}`);
+  // S-3: keymap{}ブロックのみにスコープ限定
+  // (behaviors/combos/macrosのbindingsを除外し、#defineマクロ等との誤マッチを排除)
+  const keymapBlock = extractBlock(content, 'keymap');
+  if (!keymapBlock) {
+    errors.push('keymap {} ブロックが見つかりません');
+    return errors;
   }
 
-  // 2. bindings ブロックを行ごとに検査
+  // S-2: bindings = <...>; をブロック単位で検証（全文の>;総数比較は廃止）
   const blockRe = /(?<![a-z-])bindings\s*=\s*<([\s\S]*?)>;/g;
   let m, blockIdx = 0;
-  while ((m = blockRe.exec(content)) !== null) {
-    const lines = m[1].split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    // 各トークンが & で始まるか（複数トークンの binding: &lt 1 SPACE などは先頭だけ確認）
+  while ((m = blockRe.exec(keymapBlock)) !== null) {
+    const blockContent = m[1];
+    const lines = blockContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     for (const line of lines) {
       const firstToken = line.split(/\s+/)[0];
       if (!firstToken.startsWith('&')) {
         errors.push(`bindings[${blockIdx}] に & なしトークン: "${line}"`);
       }
     }
-    // 3. バインディング数チェック
-    const parsedBindings = parseBindings(m[1]);
+    // S-3: バインディング数チェック（keymapスコープ内のみ）
     if (originalLayers && blockIdx < originalLayers.length) {
+      const parsedBindings = parseBindings(blockContent);
       const expected = originalLayers[blockIdx].originalBindings.length;
       if (parsedBindings.length !== expected) {
-        errors.push(`レイヤー "${originalLayers[blockIdx].name}": バインディング数変化 (${parsedBindings.length} ≠ ${expected})`);
+        // S-5: 変更後/変更前を明記
+        errors.push(`レイヤー "${originalLayers[blockIdx].name}": バインディング数 変更後=${parsedBindings.length} / 変更前=${expected}`);
       }
     }
     blockIdx++;
   }
 
+  // S-2: 開閉対応確認（開いたがregexで閉じられなかったブロックを検出）
+  const openCount = (keymapBlock.match(/(?<![a-z-])bindings\s*=\s*</g) || []).length;
+  if (blockIdx !== openCount) {
+    errors.push(`bindings ブロックの閉じ不一致 — 開=${openCount} / 正常に閉じられた=${blockIdx}`);
+  }
+
   return errors;
+}
+
+// S-4: 自己テスト（loadData後に呼び出し、rawとreconstructの両方で0件を確認）
+function selfTestValidate() {
+  if (!S.keymapRaw || !S.layers || S.layers.length === 0) return;
+  const errsRaw = validateKeymap(S.keymapRaw, S.layers);
+  const reconstructed = reconstructKeymap(S.keymapRaw, S.layers.map(l => ({ ...l, dirty: false })));
+  const errsRec = validateKeymap(reconstructed, S.layers);
+  const total = errsRaw.length + errsRec.length;
+  if (total > 0) {
+    console.warn('[N-3 自己テスト FAIL]', { raw: errsRaw, reconstruct: errsRec });
+    console.log('[N-3 reconstructed]', reconstructed);
+    log(`⚠ N-3自己テスト失敗: raw=${errsRaw.length}件 / reconstruct=${errsRec.length}件 — コンソールで確認`, 'log-warn');
+  } else {
+    console.log('[N-3 自己テスト OK] raw=0件 reconstruct=0件');
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2181,8 +2222,11 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     // ── 0. 構文バリデーション (N-3) ──
     const syntaxErrors = validateKeymap(newContent, S.layers);
     if (syntaxErrors.length > 0) {
-      log('⛔ 保存を中止 — 構文チェックエラーを修正してから再保存してください:', 'log-error');
+      // S-1: 再構築テキストをコンソール出力してデバッグ可能にする
+      console.warn('[N-3 バリデーション失敗] 再構築テキスト:', newContent);
+      log('⛔ 保存を中止 — 構文チェックエラー:', 'log-error');
       syntaxErrors.forEach(e => log('  ' + e, 'log-error'));
+      log('  (再構築テキストはコンソールで確認できます)', 'log-warn');
       btn.textContent = '💾 保存 (GitHub + 実機)';
       return;
     }
@@ -3177,6 +3221,7 @@ async function loadData() {
     if (S.transport) document.getElementById('btn-combo').disabled = false;
     document.getElementById('btn-td-manager').disabled = false;
     updateFlashWaitStatus();
+    selfTestValidate(); // S-4: raw + reconstruct の両方で0件を確認
 
     const wasFirst = S.dataSource === null;
     S.dataSource = { type: 'github' };
@@ -3746,8 +3791,10 @@ document.getElementById('btn-td-edit-save').addEventListener('click', async () =
     // 4. バリデーション (N-3 拡張)
     const syntaxErrors = validateKeymapWithTd(newContent, S.layers, name);
     if (syntaxErrors.length > 0) {
+      console.warn('[N-3 TD バリデーション失敗] 再構築テキスト:', newContent);
       log('⛔ 構文チェックエラー:', 'log-error');
       syntaxErrors.forEach(e => log('  ' + e, 'log-error'));
+      log('  (再構築テキストはコンソールで確認できます)', 'log-warn');
       return;
     }
 
