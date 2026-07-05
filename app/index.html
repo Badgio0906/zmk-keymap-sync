@@ -44,6 +44,18 @@
     .dot-yellow { background: var(--yellow); }
     .status-label { font-size: 0.76rem; color: var(--muted); }
 
+    /* Sync badge (M-2) */
+    .sync-badge { font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 600; white-space: nowrap; }
+    .sync-disc { background: var(--surface2); color: var(--muted); }
+    .sync-ok   { background: rgba(63,185,80,0.10); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
+    .sync-diff { background: rgba(210,153,34,0.10); color: var(--yellow); border: 1px solid rgba(210,153,34,0.25); cursor: pointer; }
+    .sync-diff:hover { filter: brightness(1.2); }
+
+    /* Data source badge (M-1) */
+    .datasource-badge { font-size: 0.72rem; padding: 3px 10px; border-radius: 6px; font-weight: 500; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); white-space: nowrap; }
+    .ds-device { color: var(--green); border-color: rgba(63,185,80,0.35); }
+    .ds-github { color: var(--accent); border-color: rgba(129,140,248,0.35); }
+
     /* Buttons */
     button { padding: 6px 13px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.15s; }
     button:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -465,6 +477,9 @@
     <span class="status-label" id="dev-status">デバイス 未接続</span>
   </div>
 
+  <!-- 同期ステータスバッジ (M-2) -->
+  <div id="sync-badge" class="sync-badge sync-disc">⊘ 実機未接続</div>
+
   <!-- PAT / 接続 / 切断ボタン -->
   <button class="btn-ghost" id="btn-settings" style="font-size:0.73rem">⚙ PAT設定</button>
   <button class="btn-ghost" id="btn-serial" style="font-size:0.73rem">⚡ USB 接続</button>
@@ -477,6 +492,9 @@
   <div class="layer-tabs" id="layer-tabs">
     <span class="layer-tabs-label">Layer:</span>
   </div>
+
+  <!-- データソースバッジ (M-1) -->
+  <div id="datasource-badge" class="datasource-badge hidden"></div>
 
   <!-- キーボードキャンバス -->
   <div class="keyboard-card">
@@ -613,6 +631,7 @@ const S = {
   idToBeh:      {},        // 最後の GetKeymap から得た behaviorId→名前マップ
   building:     false,     // GitHub Actions ビルド中ロック状態
   buildPollToken: 0,       // インクリメントで実行中ポーラーをキャンセル
+  dataSource:   null,      // 現在表示中のデータ源 { type:'github'|'device', at?:Date }
 };
 
 // ─────────────────────────────────────────────
@@ -1241,6 +1260,86 @@ function updateChangeBadge() {
 
   // キーマップ読み込み済みなら常に表示
   saveBtn.classList.toggle('hidden', S.layers.length === 0);
+  updateDataSourceBadge();
+}
+
+// ─────────────────────────────────────────────
+// データソースバッジ (M-1) / 同期ステータスバッジ (M-2)
+// ─────────────────────────────────────────────
+function updateDataSourceBadge() {
+  const badge = document.getElementById('datasource-badge');
+  if (!badge) return;
+  if (!S.dataSource) { badge.classList.add('hidden'); return; }
+
+  const editCount = Object.keys(S.edits).length;
+  badge.classList.remove('hidden', 'ds-device', 'ds-github');
+
+  let text;
+  if (S.dataSource.type === 'device') {
+    if (editCount > 0) {
+      text = '表示中: 実機+編集中';
+    } else {
+      const t = S.dataSource.at;
+      const hms = [t.getHours(), t.getMinutes(), t.getSeconds()].map(n => n.toString().padStart(2, '0')).join(':');
+      text = `表示中: 実機(最終読込 ${hms})`;
+    }
+    badge.classList.add('ds-device');
+  } else {
+    const branch = (S.kb && S.kb.branch) ? S.kb.branch : 'main';
+    text = `表示中: GitHub(${branch})`;
+    if (editCount > 0) text += ` +未保存の編集${editCount}件`;
+    badge.classList.add('ds-github');
+  }
+  badge.textContent = text;
+}
+
+function updateSyncBadge() {
+  const badge = document.getElementById('sync-badge');
+  if (!badge) return;
+  badge.onclick = null;
+  badge.className = 'sync-badge';
+
+  if (!S.transport) {
+    badge.classList.add('sync-disc');
+    badge.textContent = '⊘ 実機未接続';
+    return;
+  }
+  if (S.layers.length === 0) {
+    badge.classList.add('sync-disc');
+    badge.textContent = '— GitHub未読込';
+    return;
+  }
+
+  const dc = S.diffItems.length;
+  const uc = S.unparsableItems.length;
+  if (dc === 0) {
+    badge.classList.add('sync-ok');
+    badge.textContent = uc > 0 ? `✓ 一致 (解析不能${uc}件)` : '✓ 実機とGitHubは一致';
+  } else {
+    badge.classList.add('sync-diff');
+    badge.textContent = `⚠ 差分${dc}件`;
+    badge.onclick = () => document.getElementById('diff-panel').classList.remove('hidden');
+  }
+}
+
+async function tryAutoConnect() {
+  if (!navigator.serial) return;
+  try {
+    const ports = await navigator.serial.getPorts();
+    if (!ports.length) return;
+    const port = ports[0];
+    await port.open({ baudRate: 115200 });
+    S.transport = { type: 'serial', port, activeReader: null };
+    setDevStatus(true, 'USB Serial 接続中 (自動)');
+    document.getElementById('btn-serial').classList.add('hidden');
+    document.getElementById('btn-disconnect').classList.remove('hidden');
+    document.getElementById('btn-read-device').classList.remove('hidden');
+    document.getElementById('btn-write-device').disabled = false;
+    if (S.layers.length > 0) document.getElementById('btn-combo').disabled = false;
+    log('自動再接続完了', 'log-ok');
+    if (S.layers.length > 0) await loadFromDevice();
+    else updateSyncBadge();
+  } catch (_) { /* silent */ }
 }
 
 // ─────────────────────────────────────────────
@@ -1702,6 +1801,8 @@ document.getElementById('btn-serial').addEventListener('click', async () => {
     document.getElementById('btn-write-device').disabled = false;
     if (S.layers.length > 0) document.getElementById('btn-combo').disabled = false;
     log('Serial 接続完了', 'log-ok');
+    if (S.layers.length > 0) loadFromDevice().catch(() => {});
+    else updateSyncBadge();
   } catch (err) {
     log(`Serial エラー: ${err.message}`, 'log-error');
   }
@@ -1728,6 +1829,7 @@ document.getElementById('btn-disconnect').addEventListener('click', async () => 
   document.getElementById('btn-write-device').disabled = true;
   document.getElementById('btn-combo').disabled = true;
   log('切断しました', 'log-warn');
+  updateSyncBadge();
 });
 
 function setDevStatus(connected, label) {
@@ -1878,8 +1980,6 @@ async function writeToDevice() {
           && targetParsed.p2 === devBind.param2) continue; // 実機と一致 → スキップ
 
       diffs.push({ li, ki, targetBinding, targetParsed, behId });
-      // [調査K] 差分キーの param1 生値をログ出力
-      log(`  [調査K] diff L${li}:K${ki} dev_p1=0x${(devBind.param1 >>> 0).toString(16).padStart(8,'0')} target_p1=0x${targetParsed.p1.toString(16).padStart(8,'0')} "${targetBinding}"`, 'log-info');
     }
   }
 
@@ -2219,10 +2319,6 @@ async function loadFromDevice() {
       }
 
       // 値が異なる → 実機の値でデコードして上書き
-      // [調査K] param1 の生値をログ出力（修飾ビット検証用）
-      if (ghRpc.beh === 'kp' || ghRpc.beh === 'lt' || ghRpc.beh === 'mt') {
-        log(`  [調査K] L${li}:K${ki} dev_p1=0x${(param1 >>> 0).toString(16).padStart(8,'0')} gh_p1=0x${ghRpc.p1.toString(16).padStart(8,'0')} gh="${ghStr}"`, 'log-info');
-      }
       const behName = idToBeh[behaviorId];
       if (!behName) { unknown++; return; }
       const str = deviceBindingToString(behName, param1, param2, reverseKp);
@@ -2268,10 +2364,12 @@ async function loadFromDevice() {
     });
     S.diffItems = diffItems;
     S.unparsableItems = unparsableItems;
+    S.dataSource = { type: 'device', at: new Date() };
 
     renderLayerTabs();
     renderKeyboard();
     updateChangeBadge();
+    updateSyncBadge();
     log(`✓ 実機読み込み完了 — デコード: ${decoded} キー / 不明 behavior: ${unknown} キー`, 'log-ok');
 
     if (diffItems.length > 0) log(`  GitHub との差分: ${diffItems.length} 件`, 'log-warn');
@@ -2746,6 +2844,15 @@ async function loadData() {
     updateChangeBadge();
     if (S.transport) document.getElementById('btn-combo').disabled = false;
 
+    const wasFirst = S.dataSource === null;
+    S.dataSource = { type: 'github' };
+    updateDataSourceBadge();
+    if (S.transport && wasFirst) {
+      loadFromDevice().catch(() => {});
+    } else {
+      updateSyncBadge();
+    }
+
   } catch (err) {
     setGhStatus(false);
     log(`読み込みエラー: ${err.message}`, 'log-error');
@@ -2775,6 +2882,7 @@ function updateKbSwitcher() {
       setActiveKbId(id);
       S.kb = getActiveKb();
       S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+      S.dataSource = null;
       S.buildPollToken++;
       setBuildLock(false);
       updateKbSwitcher();
@@ -2962,6 +3070,7 @@ document.getElementById('kb-modal-delete').addEventListener('click', () => {
   document.getElementById('kb-modal').classList.add('hidden');
   updateKbSwitcher();
   S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+  S.dataSource = null;
   S.buildPollToken++;
   setBuildLock(false);
   loadData();
@@ -2994,6 +3103,7 @@ document.getElementById('kb-modal-save').addEventListener('click', () => {
   document.getElementById('kb-modal').classList.add('hidden');
   updateKbSwitcher();
   S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
+  S.dataSource = null;
   S.buildPollToken++;
   setBuildLock(false);
   loadData();
@@ -3012,6 +3122,7 @@ document.getElementById('kb-modal-save').addEventListener('click', () => {
     await loadData();
   }
   // PAT 未設定の場合はモーダルが表示されたまま
+  tryAutoConnect().catch(() => {}); // M-2: 許可済みポートへ自動再接続
 })();
 
 // 未保存編集がある間は離脱を警告する
