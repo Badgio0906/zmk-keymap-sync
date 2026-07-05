@@ -1631,17 +1631,53 @@ function renderCustomBehSection(currentBinding) {
 
   btnsDiv.querySelectorAll('[data-custom-beh]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const binding = `&${btn.dataset.customBeh}`;
+      const name    = btn.dataset.customBeh;
+      const binding = `&${name}`;
       document.getElementById('key-modal-input').value = binding;
-      // 標準ボタンのアクティブ状態をリセット、カスタムボタンをアクティブに
       document.querySelectorAll('.beh-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      M.beh = null; // 標準ビヘイビアのparams UIを消す
+      M.beh = null;
       document.getElementById('beh-params-container').innerHTML = '';
+      showCustomBehDesc(name); // 右パネルにTD情報を表示
     });
   });
 
   section.classList.remove('hidden');
+}
+
+// カスタムビヘイビア選択時に右パネルへTD情報を表示
+function showCustomBehDesc(name) {
+  const panel = document.getElementById('beh-desc-panel');
+  if (!panel || !S.keymapRaw) return;
+  const tds = parseTapDances(S.keymapRaw);
+  const td  = tds.find(t => t.name === name);
+  if (!td) {
+    panel.innerHTML = `<p class="beh-desc-empty">&amp;${name}<br>（カスタムビヘイビア）</p>`;
+    return;
+  }
+  const isFlash = !(name in S.behIdMap);
+  const flashBadge = isFlash
+    ? `<span class="beh-desc-badge badge-gh" style="background:rgba(210,153,34,0.15);color:var(--yellow);border-color:rgba(210,153,34,0.3)">⏳ フラッシュ待ち</span>`
+    : `<span class="beh-desc-badge badge-rpc">⚡ 実機書き込み対応</span>`;
+  const actionsHtml = td.actions.map((a, i) =>
+    `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:0.68rem;color:var(--muted);min-width:16px">T${i+1}</span>
+      <code style="font-family:Consolas;font-size:0.76rem;color:var(--accent)">${a}</code>
+    </div>`
+  ).join('');
+  panel.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+      <span class="beh-desc-badge" style="background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent)">tap-dance</span>
+      ${flashBadge}
+    </div>
+    <div style="font-size:0.82rem;font-weight:700;font-family:Consolas;color:var(--text);margin-bottom:8px">&amp;${td.name}</div>
+    <div style="font-size:0.73rem;color:var(--muted);margin-bottom:10px;line-height:1.6">
+      タップ数: <strong style="color:var(--text)">${td.actions.length}</strong> &nbsp;
+      tapping-term: <strong style="color:var(--text)">${td.tappingTermMs}ms</strong> &nbsp;
+      割り当て: <strong style="color:var(--text)">${td.keyCount}箇所</strong>
+    </div>
+    <div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">タップ動作</div>
+    ${actionsHtml}`;
 }
 
 function openKeyEdit(keyIdx, current) {
@@ -1653,6 +1689,12 @@ function openKeyEdit(keyIdx, current) {
   document.getElementById('beh-params-container').innerHTML = '';
   syncModalUI();
   renderCustomBehSection(current); // U-1
+  // 現在のバインディングがカスタムTDなら右パネルに情報を表示
+  if (M.beh === null && current.startsWith('&')) {
+    const customName = current.slice(1);
+    const tds = S.keymapRaw ? parseTapDances(S.keymapRaw) : [];
+    if (tds.some(t => t.name === customName)) showCustomBehDesc(customName);
+  }
   document.getElementById('key-modal').classList.remove('hidden');
 }
 
