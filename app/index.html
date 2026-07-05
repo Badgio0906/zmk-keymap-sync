@@ -15,7 +15,7 @@
       --border:    #2a3550;
       --border2:   #364560;
       --text:      #c9d1d9;
-      --muted:     #4d6070;
+      --muted:     #718aa0;   /* O-1: 旧 #4d6070(3:1) → 5.6:1 WCAG AA */
       --accent:    #818cf8;
       --accent-h:  #6366f1;
       --accent-bg: rgba(99,102,241,0.14);
@@ -27,6 +27,14 @@
       --key-brd:   #2e3e5a;
       --key-shd:   #090e18;
       --key-hover: #2a3650;
+      /* ログ色 (O-2: テーマ別上書き可) */
+      --log-bg:    #080d16;
+      --log-info:  #93c5fd;
+      --log-ok:    #6ee7b7;
+      --log-warn:  #fcd34d;
+      --log-error: #fca5a5;
+      /* リサイズ保存用 (O-4) */
+      --log-panel-h: 120px;
     }
     body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
     input, select, textarea { font-family: inherit; }
@@ -107,10 +115,10 @@
 
     /* Build status badge */
     #build-status { font-size: 0.74rem; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
-    #build-status.bs-queued   { background: #1e2535; color: var(--muted); }
-    #build-status.bs-progress { background: #271d00; color: var(--yellow); }
-    #build-status.bs-success  { background: #0d2616; color: var(--green); }
-    #build-status.bs-failure  { background: #2a0a0a; color: var(--red); }
+    #build-status.bs-queued   { background: var(--surface2); color: var(--muted); }
+    #build-status.bs-progress { background: color-mix(in srgb, var(--yellow) 12%, transparent); color: var(--yellow); }
+    #build-status.bs-success  { background: color-mix(in srgb, var(--green)  12%, transparent); color: var(--green); }
+    #build-status.bs-failure  { background: color-mix(in srgb, var(--red)    12%, transparent); color: var(--red); }
     @keyframes spin { to { transform: rotate(360deg); } }
     #build-status.bs-progress::before { content: ''; display: inline-block; width: 7px; height: 7px; border: 1.5px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 4px; vertical-align: middle; }
     #keyboard-canvas.build-locked { pointer-events: none; opacity: 0.6; }
@@ -119,12 +127,14 @@
     .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
     .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .log-header h3 { font-size: 0.78rem; color: var(--muted); }
-    .log-panel { background: #080d16; border-radius: 5px; padding: 8px 10px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 0.7rem; height: 120px; overflow-y: auto; line-height: 1.75; transition: height 0.2s ease; }
+    .log-panel { background: var(--log-bg); border-radius: 5px; padding: 8px 10px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 0.7rem; height: 120px; overflow-y: auto; line-height: 1.75; transition: height 0.2s ease; }
     .log-card.log-collapsed .log-panel { height: 38px; overflow: hidden; }
     .log-toggle-icon { display: inline-block; transition: transform 0.2s; }
     .log-card.log-collapsed .log-toggle-icon { transform: rotate(-90deg); }
-    .log-info { color: #93c5fd; } .log-ok { color: #6ee7b7; }
-    .log-warn { color: #fcd34d; } .log-error { color: #fca5a5; }
+    .log-info  { color: var(--log-info); }
+    .log-ok    { color: var(--log-ok); }
+    .log-warn  { color: var(--log-warn); }
+    .log-error { color: var(--log-error); }
 
     /* Modals */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: flex-start; justify-content: center; z-index: 100; overflow-y: auto; padding: 20px 10px; }
@@ -287,6 +297,54 @@
     #key-modal .beh-desc-body     { font-size: 0.91rem; margin-bottom: 12px; }
     #key-modal .beh-desc-example  { font-size: 0.86rem; padding: 10px 13px; }
     #key-modal .beh-desc-badge    { font-size: 0.82rem; padding: 3px 10px; }
+
+    /* ─── O-2: カラーテーマ ─── */
+    [data-theme="warm"] {
+      --bg:        #100f0c;  --surface:  #1a1712;  --surface2: #23201a;
+      --border:    #3a3020;  --border2:  #4a4030;
+      --text:      #d4cdc2;  --muted:    #8a7a68;
+      --accent:    #d4905a;  --accent-h: #c07040;  --accent-bg: rgba(212,144,90,0.15);
+      --green:     #60c060;  --yellow:   #d4a040;  --red:       #e06060;
+      --key-bg:    #1e1c16;  --key-top:  #28261e;  --key-brd:  #3a3020;
+      --key-shd:   #090806;  --key-hover:#302c20;
+      --log-bg:    #0c0a08;
+      --log-info:  #c0a868;  --log-ok: #70c08a;  --log-warn: #d4a040;  --log-error: #e08080;
+    }
+    [data-theme="light"] {
+      --bg:        #f0f4fa;  --surface:  #ffffff;  --surface2: #edf0f7;
+      --border:    #d0d8e8;  --border2:  #b8c4d8;
+      --text:      #1a2234;  --muted:    #4a5c72;
+      --accent:    #4f52d0;  --accent-h: #3c40be;  --accent-bg: rgba(79,82,208,0.10);
+      --green:     #1a7a30;  --yellow:   #8a6000;  --red:       #c02020;
+      --key-bg:    #e4eaf6;  --key-top:  #f0f5fc;  --key-brd:  #c4d0e4;
+      --key-shd:   #a8b8cc;  --key-hover:#dae2f4;
+      --log-bg:    #1a1e2a;
+      --log-info:  #6090d0;  --log-ok: #30a060;  --log-warn: #c08020;  --log-error: #d05050;
+    }
+
+    /* ─── O-3: 文字サイズ ─── */
+    html, html[data-size="sm"] { font-size: 87.5%; }  /* 小: 14px */
+    html[data-size="md"]       { font-size: 100%;   }  /* 中: 16px */
+    html[data-size="lg"]       { font-size: 112.5%; }  /* 大: 18px */
+
+    /* ─── O-2/O-3: テーマ/サイズ切替トグルグループ ─── */
+    .hdr-toggle-group {
+      display: flex; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; overflow: hidden; flex-shrink: 0;
+    }
+    .hdr-toggle {
+      padding: 3px 8px; background: transparent; color: var(--muted);
+      border: none; cursor: pointer; transition: all 0.15s; line-height: 1;
+    }
+    .hdr-toggle:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .hdr-toggle.active { background: var(--accent-bg); color: var(--accent); }
+
+    /* ─── O-4: リサイズハンドル ─── */
+    .resize-handle {
+      height: 5px; cursor: ns-resize; border-radius: 3px;
+      background: var(--border); opacity: 0.45; transition: opacity 0.15s, background 0.15s;
+    }
+    .resize-handle:hover { opacity: 1; background: var(--accent); }
 
     /* ── 差分パネル ── */
     .diff-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
@@ -480,6 +538,19 @@
   <!-- 同期ステータスバッジ (M-2) -->
   <div id="sync-badge" class="sync-badge sync-disc">⊘ 実機未接続</div>
 
+  <!-- テーマ切替 (O-2) -->
+  <div class="hdr-toggle-group" id="theme-group" title="カラーテーマ">
+    <button class="hdr-toggle" data-theme-btn="dark"  title="ダーク">🌑</button>
+    <button class="hdr-toggle" data-theme-btn="warm"  title="ウォームダーク">🌙</button>
+    <button class="hdr-toggle" data-theme-btn="light" title="ライト">☀️</button>
+  </div>
+  <!-- 文字サイズ切替 (O-3) -->
+  <div class="hdr-toggle-group" id="size-group" title="文字サイズ">
+    <button class="hdr-toggle" data-size-btn="sm" title="小" style="font-size:0.64rem;font-weight:700;padding:3px 7px">A</button>
+    <button class="hdr-toggle" data-size-btn="md" title="中" style="font-size:0.78rem;font-weight:700;padding:3px 7px">A</button>
+    <button class="hdr-toggle" data-size-btn="lg" title="大" style="font-size:0.94rem;font-weight:700;padding:3px 7px">A</button>
+  </div>
+
   <!-- PAT / 接続 / 切断ボタン -->
   <button class="btn-ghost" id="btn-settings" style="font-size:0.73rem">⚙ PAT設定</button>
   <button class="btn-ghost" id="btn-serial" style="font-size:0.73rem">⚡ USB 接続</button>
@@ -531,8 +602,8 @@
           <tr>
             <th>レイヤー</th>
             <th>キー位置</th>
-            <th>GitHub の値</th>
-            <th>実機の値</th>
+            <th title="GitHubリポジトリに保存されているバインディング">GitHub の値</th>
+            <th title="実機から読み取ったバインディング">実機の値</th>
             <th>状態</th>
           </tr>
         </thead>
@@ -540,8 +611,14 @@
       </table>
     </div>
     <div class="diff-actions">
-      <button class="btn-primary" id="btn-apply-github-to-device" style="font-size:0.78rem">⬇ GitHubを実機に適用</button>
-      <button class="btn-ghost" id="btn-apply-device-to-github" style="font-size:0.78rem">⬆ 実機をGitHubに反映（↓保存ボタンで実行）</button>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <button class="btn-primary" id="btn-apply-github-to-device" style="font-size:0.78rem" title="GitHubの値で実機を上書きします">⬇ GitHubを実機に適用</button>
+        <span style="font-size:0.68rem;color:var(--muted);padding-left:4px">GitHubの値で実機を上書き</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <button class="btn-ghost" id="btn-apply-device-to-github" style="font-size:0.78rem" title="実機の値をGitHubへ保存します（保存ボタンで実行）">⬆ 実機をGitHubに反映</button>
+        <span style="font-size:0.68rem;color:var(--muted);padding-left:4px">実機の値をGitHubへ保存（↓保存ボタンで実行）</span>
+      </div>
       <div style="flex:1"></div>
       <button class="btn-ghost" id="btn-diff-dismiss" style="font-size:0.72rem;color:var(--muted)">閉じる</button>
     </div>
@@ -566,6 +643,9 @@
       </div>
     </div>
   </div>
+
+  <!-- リサイズハンドル (O-4) -->
+  <div class="resize-handle" id="resize-log-handle"></div>
 
   <!-- ログ -->
   <div class="log-card">
@@ -826,8 +906,14 @@ function replaceLayerBindings(content, layerName, newBindings) {
 // キーラベル表示
 // ─────────────────────────────────────────────
 const KEY_ALIAS = {
-  LEFT_WIN: 'Win', LEFT_ALT: 'Alt', LEFT_SHIFT: 'Shift', LCTRL: 'Ctrl', LEFT_CTRL: 'Ctrl',
-  RIGHT_SHIFT: 'RShft', RIGHT_ALT: 'RAlt', RCTRL: 'RCtrl', RIGHT_CTRL: 'RCtrl',
+  /* O-5: GUI 系全エイリアスを Win 表記に統一 */
+  LEFT_WIN: 'Win', LGUI: 'Win', LEFT_GUI: 'Win', LWIN: 'Win', LCMD: 'Win', LEFT_COMMAND: 'Win', LMETA: 'Win', LEFT_META: 'Win',
+  RIGHT_WIN: 'RWin', RGUI: 'RWin', RIGHT_GUI: 'RWin', RWIN: 'RWin', RCMD: 'RWin', RIGHT_COMMAND: 'RWin', RMETA: 'RWin', RIGHT_META: 'RWin',
+  /* 修飾キー略称エイリアス */
+  LEFT_ALT: 'Alt', LALT: 'Alt', LEFT_SHIFT: 'Shift', LSHFT: 'Shift', LSHIFT: 'Shift',
+  LCTRL: 'Ctrl', LEFT_CTRL: 'Ctrl', LEFT_CONTROL: 'Ctrl', LCTL: 'Ctrl',
+  RIGHT_SHIFT: 'RShft', RSHFT: 'RShft', RSHIFT: 'RShft', RIGHT_ALT: 'RAlt', RALT: 'RAlt',
+  RCTRL: 'RCtrl', RIGHT_CTRL: 'RCtrl', RIGHT_CONTROL: 'RCtrl', RCTL: 'RCtrl',
   BACKSPACE: 'BkSp', SPACE: 'Space', ENTER: 'Enter', ESCAPE: 'Esc', DELETE: 'Del', TAB: 'Tab',
   LEFT_ARROW: '←', RIGHT_ARROW: '→', UP_ARROW: '↑', DOWN_ARROW: '↓',
   PAGE_UP: 'PgUp', PAGE_DOWN: 'PgDn', HOME: 'Home', END: 'End',
@@ -898,8 +984,17 @@ function renderKeyboard() {
 
   const maxX = Math.max(...S.layoutKeys.map(k => k.x)) + 1;
   const maxY = Math.max(...S.layoutKeys.map(k => k.y)) + 1.2;
-  canvas.style.width  = Math.ceil(maxX * KEY_SCALE) + 'px';
-  canvas.style.height = Math.ceil(maxY * KEY_SCALE) + 'px';
+
+  // O-7: コンテナ幅に合わせてスケール (1.0 ~ 1.5x)
+  const card = canvas.closest('.keyboard-card');
+  const naturalW = maxX * KEY_SCALE;
+  const availW = card ? card.clientWidth - 40 : naturalW;
+  const kbScale = Math.min(1.5, Math.max(1.0, availW / naturalW));
+  const KS = KEY_SCALE * kbScale;
+  const KG = KEY_GAP  * kbScale;
+
+  canvas.style.width  = Math.ceil(maxX * KS) + 'px';
+  canvas.style.height = Math.ceil(maxY * KS) + 'px';
   canvas.innerHTML = '';
 
   S.layoutKeys.forEach((kp, idx) => {
@@ -910,10 +1005,10 @@ function renderKeyboard() {
 
     const div = document.createElement('div');
     div.className = 'key' + (modified ? ' modified' : '');
-    div.style.left   = (kp.x * KEY_SCALE) + 'px';
-    div.style.top    = (kp.y * KEY_SCALE) + 'px';
-    div.style.width  = (KEY_SCALE - KEY_GAP) + 'px';
-    div.style.height = (KEY_SCALE - KEY_GAP) + 'px';
+    div.style.left   = (kp.x * KS) + 'px';
+    div.style.top    = (kp.y * KS) + 'px';
+    div.style.width  = (KS - KG) + 'px';
+    div.style.height = (KS - KG) + 'px';
 
     if (kp.r) {
       const ox = (kp.rx - kp.x) * KEY_SCALE;
@@ -1031,7 +1126,7 @@ function renderBehParams() {
       {k:'LSHFT',l:'L-Shift'},{k:'RSHFT',l:'R-Shift'},
       {k:'LCTRL',l:'L-Ctrl'},{k:'RCTRL',l:'R-Ctrl'},
       {k:'LALT',l:'L-Alt'},{k:'RALT',l:'R-Alt'},
-      {k:'LGUI',l:'L-GUI'},{k:'RGUI',l:'R-GUI'},
+      {k:'LGUI',l:'L-Win'},{k:'RGUI',l:'R-Win'},
     ];
     h = chipLabel('モディファイア（hold）', M.mtMod);
     h += `<div class="opt-btns">`;
@@ -3180,9 +3275,98 @@ document.getElementById('kb-modal-save').addEventListener('click', () => {
 });
 
 // ─────────────────────────────────────────────
+// O-2: テーマ切替
+// ─────────────────────────────────────────────
+function applyTheme(theme) {
+  const validThemes = ['dark', 'warm', 'light'];
+  if (!validThemes.includes(theme)) theme = 'dark';
+  document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.themeBtn === theme);
+  });
+  localStorage.setItem('zmk_theme', theme);
+}
+
+// ─────────────────────────────────────────────
+// O-3: 文字サイズ切替
+// ─────────────────────────────────────────────
+function applySize(size) {
+  const validSizes = ['sm', 'md', 'lg'];
+  if (!validSizes.includes(size)) size = 'sm';
+  document.documentElement.dataset.size = size;
+  document.querySelectorAll('[data-size-btn]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sizeBtn === size);
+  });
+  localStorage.setItem('zmk_size', size);
+}
+
+// ─────────────────────────────────────────────
+// O-4: ログパネルリサイズ
+// ─────────────────────────────────────────────
+function initLogResize() {
+  const handle   = document.getElementById('resize-log-handle');
+  const logPanel = document.getElementById('log'); // .log-panel の div#log
+  if (!handle || !logPanel) return;
+
+  const savedH = localStorage.getItem('zmk_log_height');
+  if (savedH) logPanel.style.height = savedH + 'px';
+
+  let dragging = false, startY = 0, startH = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    dragging = true;
+    startY = e.clientY;
+    startH = logPanel.getBoundingClientRect().height;
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const delta = startY - e.clientY; // 上にドラッグ → 高くなる
+    const newH = Math.max(38, Math.min(600, startH + delta));
+    logPanel.style.height = newH + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = '';
+    const h = Math.round(logPanel.getBoundingClientRect().height);
+    localStorage.setItem('zmk_log_height', h);
+  });
+}
+
+// ─────────────────────────────────────────────
+// O-2/O-3: ボタンクリックイベント
+// ─────────────────────────────────────────────
+document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+  btn.addEventListener('click', () => applyTheme(btn.dataset.themeBtn));
+});
+document.querySelectorAll('[data-size-btn]').forEach(btn => {
+  btn.addEventListener('click', () => applySize(btn.dataset.sizeBtn));
+});
+
+// ─────────────────────────────────────────────
+// O-7: ウィンドウリサイズ時にキーボード再描画
+// ─────────────────────────────────────────────
+let _kbResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_kbResizeTimer);
+  _kbResizeTimer = setTimeout(() => {
+    if (S.layers.length > 0) renderKeyboard();
+  }, 120);
+});
+
+// ─────────────────────────────────────────────
 // 初期化
 // ─────────────────────────────────────────────
 (async () => {
+  // O-2/O-3/O-4: localStorageから設定を復元
+  applyTheme(localStorage.getItem('zmk_theme') || 'dark');
+  applySize(localStorage.getItem('zmk_size')   || 'sm');
+  initLogResize();
+
   updateKbSwitcher();
   if (S.pat) {
     document.getElementById('pat-modal').classList.add('hidden');
