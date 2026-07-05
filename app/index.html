@@ -1631,7 +1631,9 @@ function parseZmkKeycode(token) {
     modMask |= 0x02; // LS: シフト付き記号エイリアスは暗黙にLSビットを持つ
   }
   if (code === undefined) return null;
-  return (0x07 << 16) | (modMask << 8) | (code & 0xFF);
+  // ZMK keycode format: bits 31-24 = modifier flags, bits 23-16 = HID page (0x07), bits 7-0 = usage ID
+  // >>> 0 ensures unsigned 32-bit JS number (avoids sign-bit issues for RG modifier = 0x80)
+  return ((modMask << 24) | (0x07 << 16) | (code & 0xFF)) >>> 0;
 }
 
 // バインディング文字列 → { beh, p1, p2 } に変換（RPC 送信用）
@@ -1876,6 +1878,8 @@ async function writeToDevice() {
           && targetParsed.p2 === devBind.param2) continue; // 実機と一致 → スキップ
 
       diffs.push({ li, ki, targetBinding, targetParsed, behId });
+      // [調査K] 差分キーの param1 生値をログ出力
+      log(`  [調査K] diff L${li}:K${ki} dev_p1=0x${(devBind.param1 >>> 0).toString(16).padStart(8,'0')} target_p1=0x${targetParsed.p1.toString(16).padStart(8,'0')} "${targetBinding}"`, 'log-info');
     }
   }
 
@@ -2119,7 +2123,7 @@ function buildBehIdMap(deviceBindings, layers) {
 function deviceBindingToString(behName, param1, param2, reverseKp) {
   const kpLookup = p => {
     const page    = (p >>> 16) & 0xFF;
-    const modBits = (p >>> 8) & 0xFF;
+    const modBits = (p >>> 24) & 0xFF;  // ZMK: modifier flags at bits 31-24
     const code    = p & 0xFF;
     if (page !== 0x07 && page !== 0x00) return `0x${p.toString(16)}`;
     // シフト付き記号エイリアスへの優先逆変換（LSビット単独の場合のみ）
@@ -2215,6 +2219,10 @@ async function loadFromDevice() {
       }
 
       // 値が異なる → 実機の値でデコードして上書き
+      // [調査K] param1 の生値をログ出力（修飾ビット検証用）
+      if (ghRpc.beh === 'kp' || ghRpc.beh === 'lt' || ghRpc.beh === 'mt') {
+        log(`  [調査K] L${li}:K${ki} dev_p1=0x${(param1 >>> 0).toString(16).padStart(8,'0')} gh_p1=0x${ghRpc.p1.toString(16).padStart(8,'0')} gh="${ghStr}"`, 'log-info');
+      }
       const behName = idToBeh[behaviorId];
       if (!behName) { unknown++; return; }
       const str = deviceBindingToString(behName, param1, param2, reverseKp);
