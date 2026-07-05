@@ -302,7 +302,7 @@
     [data-theme="warm"] {
       --bg:        #100f0c;  --surface:  #1a1712;  --surface2: #23201a;
       --border:    #3a3020;  --border2:  #4a4030;
-      --text:      #d4cdc2;  --muted:    #8a7a68;
+      --text:      #d4cdc2;  --muted:    #a89080;  /* O-1改: 旧#8a7a68(surface:4.43/surface2:3.99) → 6.09/5.49 WCAG AA */
       --accent:    #d4905a;  --accent-h: #c07040;  --accent-bg: rgba(212,144,90,0.15);
       --green:     #60c060;  --yellow:   #d4a040;  --red:       #e06060;
       --key-bg:    #1e1c16;  --key-top:  #28261e;  --key-brd:  #3a3020;
@@ -623,10 +623,10 @@
       <button class="btn-ghost" id="btn-diff-dismiss" style="font-size:0.72rem;color:var(--muted)">閉じる</button>
     </div>
 
-    <!-- 解析不能（アプリ側未対応の構文）— 差分にも適用対象にも含めない -->
+    <!-- 解析不能（パラメータ付き未知構文）— 差分にも適用対象にも含めない -->
     <div class="hidden" id="unparsable-section" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
       <h3 style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;gap:8px">
-        解析不能（アプリ側未対応の構文）
+        解析不能（パラメータ付き未知構文・比較不可）
         <span id="unparsable-summary" style="font-size:0.72rem;font-weight:normal"></span>
       </h3>
       <div style="overflow-x:auto;max-height:160px;overflow-y:auto">
@@ -969,7 +969,9 @@ function formatBinding(b) {
       else label = `BT:${args[0]}`;
       break;
     }
-    default: label = `&${beh}`;
+    default:
+      // P: カスタムビヘイビア — &を外した名前を短縮表示、ホバーで全文(&beh)
+      label = beh.length <= 9 ? beh : beh.slice(0, 7) + '…';
   }
   return { label, cls: '' };
 }
@@ -1936,6 +1938,13 @@ function parseBindingForRpc(str) {
     return { beh: 'bt', p1: action, p2: btM[2] !== undefined ? parseInt(btM[2]) : 0 };
   }
 
+  // P: パラメータなしカスタムビヘイビア (&TdLang1Lang2 等)
+  // パラメータ付き未知構文は従来どおり null (解析不能) のまま
+  const customNoParamM = str.match(/^&(\w+)$/);
+  if (customNoParamM) {
+    return { beh: customNoParamM[1], p1: 0, p2: 0, isCustom: true };
+  }
+
   return null;
 }
 
@@ -2422,7 +2431,9 @@ function deviceBindingToString(behName, param1, param2, reverseKp) {
       const act = ACTS.get(param1) ?? `BT_${param1}`;
       return param1 === 3 ? `&bt ${act} ${param2}` : `&bt ${act}`;
     }
-    default: return null;
+    default:
+      // P: カスタムビヘイビア — パラメータなし (p1=p2=0) の場合のみ再構成可能
+      return (param1 === 0 && param2 === 0) ? `&${behName}` : null;
   }
 }
 
