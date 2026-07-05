@@ -404,9 +404,52 @@
     .diff-na { color: var(--red); font-size: 0.72rem; font-family: sans-serif; }
     .diff-ok { color: var(--green); font-size: 0.72rem; font-family: sans-serif; }
     .diff-actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+
+    /* T-4: モーダル内 input/select のテーマ対応 */
+    .modal-box input[type="text"],
+    .modal-box input[type="number"],
+    .modal-box select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 7px; padding: 6px 10px; width: 100%;
+      font-family: inherit; font-size: 0.82rem;
+    }
+    .modal-box input[type="text"]:focus,
+    .modal-box input[type="number"]:focus,
+    .modal-box select:focus { outline: none; border-color: var(--accent); }
+
+    /* T-1: キーピックバナー */
+    .key-pick-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 600;
+      background: var(--accent); color: #fff;
+      padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.84rem; font-weight: 600; gap: 14px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.45);
+    }
+    .key-pick-banner .btn-ghost { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.45); flex-shrink: 0; }
+    .key-pick-banner .btn-ghost:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,0.15); }
+
+    /* T-1: ピックモード中のキーボード */
+    .key-pick-mode .key { cursor: crosshair !important; }
+    .key-pick-mode .key:hover { background: rgba(129,140,248,0.28) !important; border-color: var(--accent) !important; transform: scale(1.04); }
+
+    /* T-3: 既存TD割り当てキーのハイライト */
+    .key.td-assigned { background: rgba(129,140,248,0.18) !important; border-color: var(--accent) !important; }
+    .key.td-assigned .key-label { color: var(--accent) !important; font-weight: 700; }
+
+    /* T-2: 割り当てプレビュー */
+    .assign-preview { margin-top:8px; padding:7px 9px; border-radius:6px; background: var(--surface2); border: 1px solid var(--border); font-size:0.76rem; line-height:1.6; }
+    .assign-preview code { font-family: Consolas,monospace; color: var(--accent); }
+    .assign-preview .warn { color: var(--yellow); font-size:0.72rem; }
+    .assign-preview .err  { color: var(--red); }
   </style>
 </head>
 <body>
+
+<!-- T-1: キーピックバナー -->
+<div id="key-pick-banner" class="key-pick-banner hidden">
+  <span>⌨ 割り当て先のキーをクリックしてください。レイヤータブでレイヤー切替も可能です</span>
+  <button class="btn-ghost" id="btn-key-pick-cancel">✕ キャンセル</button>
+</div>
 
 <!-- PAT設定モーダル -->
 <div class="modal-overlay" id="pat-modal">
@@ -574,13 +617,17 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
           <div>
             <label class="form-label" style="font-size:0.7rem">レイヤー</label>
-            <select id="td-assign-layer" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-size:0.8rem"></select>
+            <select id="td-assign-layer"></select>
           </div>
           <div>
             <label class="form-label" style="font-size:0.7rem">キー位置 (0〜)</label>
-            <input type="number" id="td-assign-key" min="0" value="0" style="margin-bottom:0">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="td-assign-key" min="0" value="0" style="margin-bottom:0;flex:1;min-width:0">
+              <button class="btn-ghost" id="btn-key-pick" style="font-size:0.72rem;white-space:nowrap;flex-shrink:0;padding:5px 9px">⌨ 選択</button>
+            </div>
           </div>
         </div>
+        <div id="td-assign-preview"></div>
       </div>
 
       <div class="modal-actions" style="margin-top:16px">
@@ -1184,6 +1231,13 @@ function renderKeyboard() {
   canvas.style.width  = Math.ceil(maxX * KS) + 'px';
   canvas.style.height = Math.ceil(maxY * KS) + 'px';
   canvas.innerHTML = '';
+  canvas.classList.toggle('key-pick-mode', keyPickMode); // T-1
+
+  // T-3: 編集中の TD 名を取得（割り当て済みキーをハイライト）
+  const tdEditView = document.getElementById('td-edit-view');
+  const tdNameInput = document.getElementById('td-name-input');
+  const tdHighlightName = (tdEditView && !tdEditView.classList.contains('hidden') && tdNameInput)
+    ? tdNameInput.value.trim() : null;
 
   S.layoutKeys.forEach((kp, idx) => {
     const binding  = layer.bindings[idx] ?? '?';
@@ -1192,7 +1246,10 @@ function renderKeyboard() {
     const { label, cls } = formatBinding(binding);
 
     const div = document.createElement('div');
-    div.className = 'key' + (modified ? ' modified' : '');
+    let keyCls = 'key' + (modified ? ' modified' : '');
+    // T-3: 既存TD割り当てハイライト
+    if (tdHighlightName && binding === `&${tdHighlightName}`) keyCls += ' td-assigned';
+    div.className = keyCls;
     div.style.left   = (kp.x * KS) + 'px';
     div.style.top    = (kp.y * KS) + 'px';
     div.style.width  = (KS - KG) + 'px';
@@ -1211,7 +1268,14 @@ function renderKeyboard() {
     div.appendChild(span);
     div.title    = binding;
     div.dataset.idx = idx;
-    div.addEventListener('click', () => openKeyEdit(idx, binding));
+    // T-1: ピックモード中は割り当て先確定、通常モードはキー編集
+    div.addEventListener('click', () => {
+      if (keyPickMode) {
+        endKeyPick(S.currentLayer, idx);
+      } else {
+        openKeyEdit(idx, binding);
+      }
+    });
     canvas.appendChild(div);
   });
 }
@@ -1227,7 +1291,15 @@ function renderLayerTabs() {
     const btn = document.createElement('button');
     btn.className = 'layer-tab' + (idx === S.currentLayer ? ' active' : '') + (layer.dirty ? ' dirty' : '');
     btn.textContent = `${idx}: ${layer.name}`;
-    btn.addEventListener('click', () => { S.currentLayer = idx; renderLayerTabs(); renderKeyboard(); });
+    btn.addEventListener('click', () => {
+      S.currentLayer = idx;
+      // T-1: ピックモード中はフォームのレイヤー選択にも同期
+      if (keyPickMode) {
+        const sel = document.getElementById('td-assign-layer');
+        if (sel) { sel.value = idx; updateAssignPreview(); }
+      }
+      renderLayerTabs(); renderKeyboard();
+    });
     container.appendChild(btn);
   });
 }
@@ -1268,6 +1340,7 @@ const M = { beh:null, kpKey:null, ltLayer:null, ltKey:null,
             mtMod:null, mtKey:null, mkpBtn:null, btAction:null, btIdx:0 };
 
 let editingKeyIdx = null;
+let keyPickMode = false; // T-1: キーボードからの割り当て先選択モード
 
 // キーボード HTML を生成
 function buildKbdHTML(fieldTag, activeKey) {
@@ -3607,6 +3680,70 @@ function updateFlashWaitStatus() {
 let _tdIsNew = false;
 let _tdOrigName = null;
 
+// ─────────────────────────────────────────────
+// T-1: キーピック選択モード
+// ─────────────────────────────────────────────
+function startKeyPick() {
+  keyPickMode = true;
+  document.getElementById('td-modal').classList.add('hidden');
+  document.getElementById('key-pick-banner').classList.remove('hidden');
+  renderKeyboard();
+}
+
+function endKeyPick(layerIdx, keyIdx) {
+  keyPickMode = false;
+  document.getElementById('key-pick-banner').classList.add('hidden');
+  document.getElementById('td-modal').classList.remove('hidden');
+  if (layerIdx !== null && keyIdx !== null) {
+    document.getElementById('td-assign-layer').value = layerIdx;
+    document.getElementById('td-assign-key').value   = keyIdx;
+    updateAssignPreview();
+  }
+  renderKeyboard();
+}
+
+// T-2: 割り当て先プレビュー（レイヤー・キー位置が変わるたびに更新）
+function updateAssignPreview() {
+  const preview = document.getElementById('td-assign-preview');
+  if (!preview || !_tdIsNew) return;
+  const layerIdx = parseInt(document.getElementById('td-assign-layer').value);
+  const keyIdx   = parseInt(document.getElementById('td-assign-key').value);
+  const saveBtn  = document.getElementById('btn-td-edit-save');
+
+  if (isNaN(layerIdx) || isNaN(keyIdx)) { preview.innerHTML = ''; return; }
+  const layer = S.layers[layerIdx];
+  if (!layer) {
+    preview.innerHTML = `<div class="assign-preview"><span class="err">レイヤーが無効です</span></div>`;
+    if (saveBtn) saveBtn.disabled = true;
+    return;
+  }
+  if (keyIdx < 0 || keyIdx >= layer.bindings.length) {
+    preview.innerHTML = `<div class="assign-preview"><span class="err">範囲外 — 0〜${layer.bindings.length - 1} で指定してください</span></div>`;
+    if (saveBtn) saveBtn.disabled = true;
+    return;
+  }
+  if (saveBtn) saveBtn.disabled = false;
+  const current = layer.bindings[keyIdx];
+  preview.innerHTML = `<div class="assign-preview">
+    レイヤー${layerIdx} / 位置${keyIdx} / 現在: <code>${current}</code>
+    <div class="warn">⚠ この割り当ては新しい tap-dance で上書きされます</div>
+  </div>`;
+  // T-3: キーボードを再描画してTD名ハイライトを更新
+  renderKeyboard();
+}
+
+document.getElementById('btn-key-pick').addEventListener('click', startKeyPick);
+document.getElementById('btn-key-pick-cancel').addEventListener('click', () => endKeyPick(null, null));
+
+// Esc でピックモード終了
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && keyPickMode) endKeyPick(null, null);
+});
+
+// T-2: レイヤー・キー位置の変更でプレビューを更新
+document.getElementById('td-assign-layer').addEventListener('change', updateAssignPreview);
+document.getElementById('td-assign-key').addEventListener('input', updateAssignPreview);
+
 function openTdManager() {
   if (!S.keymapRaw) return;
   _tdIsNew = false;
@@ -3620,6 +3757,7 @@ function showTdListView() {
   document.getElementById('td-list-view').classList.remove('hidden');
   document.getElementById('td-edit-view').classList.add('hidden');
   renderTdList();
+  renderKeyboard(); // T-3: ハイライトをリセット
 }
 
 function renderTdList() {
@@ -3672,7 +3810,12 @@ function openTdEdit(name) {
     const sel = document.getElementById('td-assign-layer');
     sel.innerHTML = S.layers.map((l, i) => `<option value="${i}">${i}: ${l.name}</option>`).join('');
     document.getElementById('td-assign-key').value = 0;
+    document.getElementById('td-assign-preview').innerHTML = '';
+    updateAssignPreview(); // T-2: 初期プレビュー表示
+  } else {
+    document.getElementById('td-assign-preview').innerHTML = '';
   }
+  renderKeyboard(); // T-3: 既存TD割り当てキーをハイライト
 
   // アクションリスト
   const actions = td ? [...td.actions] : ['&kp A', '&kp B'];
@@ -3722,6 +3865,7 @@ document.getElementById('btn-td-edit-cancel').addEventListener('click', showTdLi
 
 document.getElementById('td-modal-close').addEventListener('click', () => {
   document.getElementById('td-modal').classList.add('hidden');
+  renderKeyboard(); // T-3: ハイライトをリセット
 });
 
 document.getElementById('btn-td-new').addEventListener('click', () => openTdEdit(null));
