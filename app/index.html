@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZMK Keymap Sync — roBa</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23818cf8'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white'%3E%E2%8C%A8%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
   <style>
@@ -540,6 +541,11 @@
           <button class="beh-btn" data-beh="bt">&amp;bt</button>
           <button class="beh-btn" data-beh="bootloader">&amp;bootloader</button>
         </div>
+        <!-- U-1: カスタムビヘイビア（TD等）選択セクション -->
+        <div id="custom-beh-section" class="hidden">
+          <div style="font-size:0.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">カスタム</div>
+          <div id="custom-beh-btns" class="beh-selector" style="gap:4px"></div>
+        </div>
         <div id="beh-params-container"></div>
         <div class="binding-preview-wrap">
           <label>プレビュー（直接編集も可）</label>
@@ -584,7 +590,20 @@
     <!-- 一覧ビュー -->
     <div id="td-list-view">
       <div class="td-list" id="td-list"></div>
-      <div style="display:flex;gap:8px;justify-content:space-between;margin-top:4px">
+      <!-- U-3: 削除確認パネル -->
+      <div id="td-delete-confirm" class="hidden" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:8px">
+        <div style="font-size:0.82rem;font-weight:600;margin-bottom:6px">⚠ <span id="td-delete-name" style="font-family:Consolas;color:var(--red)"></span> を削除しますか？</div>
+        <div id="td-delete-keys-area" class="hidden" style="margin-bottom:8px">
+          <div style="font-size:0.76rem;color:var(--muted);margin-bottom:4px">以下の割り当てを <code style="color:var(--accent)">&amp;trans</code> に置換します：</div>
+          <ul id="td-delete-keys" style="font-size:0.74rem;font-family:Consolas;color:var(--text);list-style:disc inside;line-height:1.8"></ul>
+        </div>
+        <div style="font-size:0.72rem;color:var(--yellow);margin-bottom:10px">⚠ 実機の旧IDはフラッシュするまで残ります</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" id="btn-td-delete-cancel" style="font-size:0.76rem">キャンセル</button>
+          <button class="btn-danger" id="btn-td-delete-ok" style="font-size:0.76rem">削除実行</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
         <button class="btn-primary" id="btn-td-new" style="font-size:0.78rem">＋ 新規作成</button>
         <button class="btn-ghost" id="td-modal-close" style="font-size:0.78rem">閉じる</button>
       </div>
@@ -763,6 +782,7 @@
         <hr class="sp-divider" style="margin-bottom:8px">
         <div class="sp-label">ビルド</div>
         <span id="build-status" style="font-size:0.74rem"></span>
+        <div id="build-guidance" class="hidden" style="font-size:0.68rem;color:var(--muted);margin-top:5px;line-height:1.55"></div>
       </div>
       <!-- R-4: フラッシュ待ちCaution (非表示→TD保存後に表示) -->
       <div class="hidden" id="sp-flash-section">
@@ -1588,16 +1608,51 @@ document.getElementById('beh-selector').addEventListener('click', e => {
   syncModalUI();
 });
 
+// U-1: カスタムビヘイビアセクションを更新
+function renderCustomBehSection(currentBinding) {
+  const section  = document.getElementById('custom-beh-section');
+  const btnsDiv  = document.getElementById('custom-beh-btns');
+  if (!S.keymapRaw || !section || !btnsDiv) return;
+
+  const tds = parseTapDances(S.keymapRaw);
+  if (tds.length === 0) { section.classList.add('hidden'); return; }
+
+  const flashNames = new Set(getFlashWaitTds().map(t => t.name));
+  btnsDiv.innerHTML = tds.map(td => {
+    const binding = `&${td.name}`;
+    const isFlash = flashNames.has(td.name);
+    const isActive = currentBinding === binding;
+    if (isFlash) {
+      return `<button class="beh-btn" disabled title="フラッシュ待ち — 実機反映後に使用可能" style="opacity:0.4;cursor:not-allowed">` +
+             `${td.name} <span style="font-size:0.58rem;vertical-align:middle">要F</span></button>`;
+    }
+    return `<button class="beh-btn${isActive ? ' active' : ''}" data-custom-beh="${td.name}" title="${binding}">${td.name}</button>`;
+  }).join('');
+
+  btnsDiv.querySelectorAll('[data-custom-beh]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const binding = `&${btn.dataset.customBeh}`;
+      document.getElementById('key-modal-input').value = binding;
+      // 標準ボタンのアクティブ状態をリセット、カスタムボタンをアクティブに
+      document.querySelectorAll('.beh-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      M.beh = null; // 標準ビヘイビアのparams UIを消す
+      document.getElementById('beh-params-container').innerHTML = '';
+    });
+  });
+
+  section.classList.remove('hidden');
+}
+
 function openKeyEdit(keyIdx, current) {
   editingKeyIdx = keyIdx;
   document.getElementById('key-modal-current').textContent = `(現在: ${current})`;
-  // 状態リセット
   M.beh = null; M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = null; M.btIdx = 0;
-  // 現在のバインディングをパースしてプリセット
   parseCurrentBinding(current);
   document.querySelectorAll('.beh-btn').forEach(b => b.classList.toggle('active', b.dataset.beh === M.beh));
   document.getElementById('beh-params-container').innerHTML = '';
   syncModalUI();
+  renderCustomBehSection(current); // U-1
   document.getElementById('key-modal').classList.remove('hidden');
 }
 
@@ -2509,7 +2564,16 @@ function showBuildStatus(state, text) {
   const el = document.getElementById('build-status');
   el.className = `bs-${state}`;
   el.textContent = text;
-  // Q: ビルドセクションを表示
+  // U-2改: ビルド中のみ操作案内を表示
+  const guidance = document.getElementById('build-guidance');
+  if (guidance) {
+    if (state === 'progress' || state === 'queued') {
+      guidance.textContent = '保存はロック中。「実機に書き込み」はビルドと独立して使用できます';
+      guidance.classList.remove('hidden');
+    } else {
+      guidance.classList.add('hidden');
+    }
+  }
   document.getElementById('sp-build-section')?.classList.remove('hidden');
 }
 
@@ -3652,6 +3716,113 @@ function collectExistingBehaviorNames(raw) {
   return names;
 }
 
+// U-3: behaviors{} ブロックから指定TD ノードを削除
+function removeTdFromBehaviors(raw, name) {
+  const behIdx = raw.indexOf('behaviors {');
+  if (behIdx === -1) return raw;
+  let depth = 0, behEnd = -1;
+  for (let i = behIdx; i < raw.length; i++) {
+    if (raw[i] === '{') depth++;
+    else if (raw[i] === '}' && --depth === 0) { behEnd = i; break; }
+  }
+  if (behEnd === -1) return raw;
+  const behBlock = raw.slice(behIdx, behEnd);
+  const existRe = new RegExp(`([ \\t]*)${name}\\s*:\\s*${name}\\s*\\{[^{}]*\\}\\s*;\\s*\\n?`, 'm');
+  if (!existRe.test(behBlock)) return raw;
+  const newBlock = behBlock.replace(existRe, '');
+  return raw.slice(0, behIdx) + newBlock + raw.slice(behEnd);
+}
+
+// U-3: TD削除の実行
+let _tdToDelete = null;
+async function confirmDeleteTd(name) {
+  _tdToDelete = name;
+  // 割り当て中のキーを列挙
+  const affected = [];
+  S.layers.forEach((layer, li) => {
+    layer.bindings.forEach((b, ki) => {
+      if (b === `&${name}`) affected.push({ li, ki, layerName: layer.name });
+    });
+  });
+  document.getElementById('td-delete-name').textContent = `&${name}`;
+  const keysArea = document.getElementById('td-delete-keys-area');
+  const keysList = document.getElementById('td-delete-keys');
+  if (affected.length > 0) {
+    keysList.innerHTML = affected.map(a => `<li>レイヤー${a.li} (${a.layerName}) / 位置${a.ki}</li>`).join('');
+    keysArea.classList.remove('hidden');
+  } else {
+    keysArea.classList.add('hidden');
+  }
+  document.getElementById('td-delete-confirm').classList.remove('hidden');
+}
+
+async function executeTdDelete() {
+  const name = _tdToDelete;
+  _tdToDelete = null;
+  document.getElementById('td-delete-confirm').classList.add('hidden');
+  if (!name || !S.pat) return;
+
+  log(`&${name} を削除中...`, 'log-info');
+  try {
+    // 1. behaviors{} からノード削除
+    let newContent = removeTdFromBehaviors(S.keymapRaw, name);
+
+    // 2. 全レイヤーで &name → &trans 置換
+    const affectedLayers = [];
+    for (const layer of S.layers) {
+      const newBindings = layer.bindings.map(b => b === `&${name}` ? '&trans' : b);
+      if (newBindings.some((b, i) => b !== layer.bindings[i])) {
+        newContent = replaceLayerBindings(newContent, layer.name, newBindings);
+        affectedLayers.push(layer.name);
+      }
+    }
+
+    // 3. バリデーション
+    const tempLayers = parseKeymap(newContent);
+    const errs = validateKeymap(newContent, tempLayers);
+    if (errs.length > 0) {
+      console.warn('[U-3 削除バリデーション失敗]', newContent);
+      log('⛔ 削除バリデーションエラー:', 'log-error');
+      errs.forEach(e => log('  ' + e, 'log-error'));
+      return;
+    }
+
+    // 4. SHA 競合チェック
+    const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
+    if (latestSha !== S.keymapSha) {
+      log('⚠ GitHub上でファイルが変更されています。再読み込み後にやり直してください', 'log-warn');
+      return;
+    }
+
+    // 5. push
+    const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, `behaviors: remove tap-dance &${name} via zmk-keymap-sync`);
+    log(`✓ &${name} を削除しました`, 'log-ok');
+    if (affectedLayers.length > 0) {
+      log(`  以下のレイヤーで &trans に置換しました: ${affectedLayers.join(', ')}`, 'log-info');
+    }
+    log('⚠ 実機の旧IDはフラッシュするまで残ります。新ファームをフラッシュしてください', 'log-warn');
+
+    // 6. 状態更新
+    S.keymapSha = putResult.content.sha;
+    S.keymapRaw = newContent;
+    S.layers = parseKeymap(newContent);
+    renderLayerTabs();
+    renderKeyboard();
+    updateChangeBadge();
+    updateFlashWaitStatus();
+    renderTdList();
+
+    // 7. ビルド監視
+    setBuildLock(true);
+    pollBuildStatus(putResult.commit.sha).catch(e => {
+      log(`ビルド監視エラー: ${e.message}`, 'log-warn');
+      setBuildLock(false);
+    });
+  } catch (e) {
+    log(`削除エラー: ${e.message}`, 'log-error');
+  }
+}
+
 // R-4: フラッシュ待ち tap-dance 一覧を返す（ID未学習のカスタムビヘイビア）
 function getFlashWaitTds() {
   if (!S.keymapRaw) return [];
@@ -3681,9 +3852,14 @@ let _tdIsNew = false;
 let _tdOrigName = null;
 
 // ─────────────────────────────────────────────
-// T-1: キーピック選択モード
+// T-1 / U-1: キーピック選択モード
+// tdAssignName: null → TD新規作成フォームへの反映 (T-1)
+//              string → そのTDを選択キーに即時割り当て (U-1)
 // ─────────────────────────────────────────────
-function startKeyPick() {
+let _keyPickForTd = null; // null | string(tdName)
+
+function startKeyPick(tdAssignName = null) {
+  _keyPickForTd = tdAssignName;
   keyPickMode = true;
   document.getElementById('td-modal').classList.add('hidden');
   document.getElementById('key-pick-banner').classList.remove('hidden');
@@ -3691,13 +3867,33 @@ function startKeyPick() {
 }
 
 function endKeyPick(layerIdx, keyIdx) {
+  const target = _keyPickForTd;
+  _keyPickForTd = null;
   keyPickMode = false;
   document.getElementById('key-pick-banner').classList.add('hidden');
   document.getElementById('td-modal').classList.remove('hidden');
+
   if (layerIdx !== null && keyIdx !== null) {
-    document.getElementById('td-assign-layer').value = layerIdx;
-    document.getElementById('td-assign-key').value   = keyIdx;
-    updateAssignPreview();
+    if (target === null) {
+      // T-1: TD作成フォームのレイヤー・キー位置に反映
+      document.getElementById('td-assign-layer').value = layerIdx;
+      document.getElementById('td-assign-key').value   = keyIdx;
+      updateAssignPreview();
+    } else {
+      // U-1: 既存TDを選択キーに直接割り当て（通常編集と同じ扱い）
+      const layer = S.layers[layerIdx];
+      if (layer && keyIdx >= 0 && keyIdx < layer.bindings.length) {
+        const binding = `&${target}`;
+        const editKey = `${layerIdx}:${keyIdx}`;
+        layer.bindings[keyIdx] = binding;
+        S.edits[editKey] = binding;
+        layer.dirty = layer.bindings.some((b, i) => b !== layer.originalBindings[i]);
+        renderLayerTabs();
+        updateChangeBadge();
+        log(`✓ レイヤー${layerIdx} / 位置${keyIdx} に ${binding} を割り当てました`, 'log-ok');
+        log('  「💾 保存 (GitHub + 実機)」で保存してください', 'log-info');
+      }
+    }
   }
   renderKeyboard();
 }
@@ -3762,6 +3958,7 @@ function showTdListView() {
 
 function renderTdList() {
   const list = document.getElementById('td-list');
+  document.getElementById('td-delete-confirm').classList.add('hidden'); // リセット
   const tds = parseTapDances(S.keymapRaw || '');
   if (tds.length === 0) {
     list.innerHTML = '<p style="font-size:0.78rem;color:var(--muted);padding:6px 0">tap-dance ビヘイビアなし</p>';
@@ -3778,12 +3975,22 @@ function renderTdList() {
         <div class="td-row-info">タップ数: ${td.actions.length} / tapping-term: ${td.tappingTermMs}ms / 割り当て: ${td.keyCount}箇所</div>
         <div class="td-row-info" style="font-family:Consolas;font-size:0.7rem;color:var(--muted)">${td.actions.join(' → ')}</div>
       </div>
-      <button class="btn-ghost" data-td-edit="${td.name}" style="font-size:0.72rem;padding:3px 8px">編集</button>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button class="btn-ghost" data-td-assign="${td.name}" style="font-size:0.7rem;padding:3px 7px">⌨ 割り当て</button>
+        <button class="btn-ghost" data-td-edit="${td.name}" style="font-size:0.7rem;padding:3px 7px">編集</button>
+        <button class="btn-ghost" data-td-del="${td.name}" style="font-size:0.7rem;padding:3px 7px;color:var(--red)">削除</button>
+      </div>
     </div>`;
   }).join('');
 
+  list.querySelectorAll('[data-td-assign]').forEach(btn => {
+    btn.addEventListener('click', () => startKeyPick(btn.dataset.tdAssign)); // U-1
+  });
   list.querySelectorAll('[data-td-edit]').forEach(btn => {
     btn.addEventListener('click', () => openTdEdit(btn.dataset.tdEdit));
+  });
+  list.querySelectorAll('[data-td-del]').forEach(btn => {
+    btn.addEventListener('click', () => confirmDeleteTd(btn.dataset.tdDel)); // U-3
   });
 }
 
@@ -3869,6 +4076,13 @@ document.getElementById('td-modal-close').addEventListener('click', () => {
 });
 
 document.getElementById('btn-td-new').addEventListener('click', () => openTdEdit(null));
+
+// U-3: 削除確認ボタン
+document.getElementById('btn-td-delete-cancel').addEventListener('click', () => {
+  _tdToDelete = null;
+  document.getElementById('td-delete-confirm').classList.add('hidden');
+});
+document.getElementById('btn-td-delete-ok').addEventListener('click', executeTdDelete);
 
 document.getElementById('btn-td-manager').addEventListener('click', openTdManager);
 
