@@ -747,6 +747,45 @@ function parseBindings(text) {
 }
 
 // ─────────────────────────────────────────────
+// 保存前構文バリデーション (N-3)
+// ─────────────────────────────────────────────
+function validateKeymap(content, originalLayers) {
+  const errors = [];
+
+  // 1. < > 対応チェック
+  const openCount  = (content.match(/(?<![a-z-])bindings\s*=\s*</g) || []).length;
+  const closeCount = (content.match(/>;/g) || []).length;
+  if (openCount !== closeCount) {
+    errors.push(`< > 対応不一致 — bindings=${openCount} / >;=${closeCount}`);
+  }
+
+  // 2. bindings ブロックを行ごとに検査
+  const blockRe = /(?<![a-z-])bindings\s*=\s*<([\s\S]*?)>;/g;
+  let m, blockIdx = 0;
+  while ((m = blockRe.exec(content)) !== null) {
+    const lines = m[1].split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // 各トークンが & で始まるか（複数トークンの binding: &lt 1 SPACE などは先頭だけ確認）
+    for (const line of lines) {
+      const firstToken = line.split(/\s+/)[0];
+      if (!firstToken.startsWith('&')) {
+        errors.push(`bindings[${blockIdx}] に & なしトークン: "${line}"`);
+      }
+    }
+    // 3. バインディング数チェック
+    const parsedBindings = parseBindings(m[1]);
+    if (originalLayers && blockIdx < originalLayers.length) {
+      const expected = originalLayers[blockIdx].originalBindings.length;
+      if (parsedBindings.length !== expected) {
+        errors.push(`レイヤー "${originalLayers[blockIdx].name}": バインディング数変化 (${parsedBindings.length} ≠ ${expected})`);
+      }
+    }
+    blockIdx++;
+  }
+
+  return errors;
+}
+
+// ─────────────────────────────────────────────
 // Keymap再構築
 // ─────────────────────────────────────────────
 function reconstructKeymap(original, layers) {
@@ -1218,10 +1257,30 @@ function closeKeyModal() {
   editingKeyIdx = null;
 }
 
+// & なしで入力された known behavior を自動補完し、無効なら null を返す
+function normalizeBinding(raw) {
+  let s = raw.trim();
+  if (!s) return null;
+  if (!s.startsWith('&')) {
+    const BEHAVIORS = ['none','trans','bootloader','kp','lt','mt','mkp','bt'];
+    if (BEHAVIORS.includes(s.split(/\s+/)[0])) s = '&' + s;
+  }
+  return s.startsWith('&') ? s : null;
+}
+
 function applyKeyEdit() {
   // プレビュー入力欄の値を優先（直接入力も受け付ける）
-  const newBinding = document.getElementById('key-modal-input').value.trim();
-  if (!newBinding || editingKeyIdx === null) return;
+  const raw = document.getElementById('key-modal-input').value;
+  const newBinding = normalizeBinding(raw);
+  if (editingKeyIdx === null) return;
+  if (!newBinding) {
+    if (raw.trim()) log(`⚠ 無効なバインディング: "${raw.trim()}" — & で始まる必要があります`, 'log-warn');
+    return;
+  }
+  if (newBinding !== raw.trim()) {
+    document.getElementById('key-modal-input').value = newBinding;
+    log(`バインディングを正規化: "${raw.trim()}" → "${newBinding}"`, 'log-info');
+  }
 
   const editKey = `${S.currentLayer}:${editingKeyIdx}`;
   const layer   = S.layers[S.currentLayer];
@@ -1869,6 +1928,16 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     btn.textContent = '保存中...';
     log('keymap を再構築中...', 'log-info');
     const newContent = reconstructKeymap(S.keymapRaw, S.layers);
+
+    // ── 0. 構文バリデーション (N-3) ──
+    const syntaxErrors = validateKeymap(newContent, S.layers);
+    if (syntaxErrors.length > 0) {
+      log('⛔ 保存を中止 — 構文チェックエラーを修正してから再保存してください:', 'log-error');
+      syntaxErrors.forEach(e => log('  ' + e, 'log-error'));
+      btn.textContent = '💾 保存 (GitHub + 実機)';
+      return;
+    }
+    log('✓ 構文チェック通過', 'log-ok');
 
     // ── 1. SHA 競合チェック ──
     const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
