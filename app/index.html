@@ -379,6 +379,20 @@
     }
     .resize-handle:hover { opacity: 1; background: var(--accent); }
 
+    /* ── R: tap-dance 管理 ── */
+    .td-list { display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto; margin-bottom:12px; }
+    .td-row { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; align-items:center;
+              background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
+    .td-row-name { font-family:Consolas,monospace; font-size:0.82rem; color:var(--accent); font-weight:600; }
+    .td-row-info { font-size:0.72rem; color:var(--muted); }
+    .td-actions-list { display:flex; flex-direction:column; gap:4px; }
+    .td-action-row { display:grid; grid-template-columns:1fr auto auto; gap:4px; align-items:center; }
+    .td-action-row input { margin-bottom:0; font-size:0.78rem; padding:4px 8px; font-family:Consolas,monospace; }
+    .flash-caution {
+      font-size:0.74rem; line-height:1.55; padding:7px 9px; border-radius:6px;
+      background:color-mix(in srgb,var(--yellow) 10%,transparent);
+      color:var(--yellow); border:1px solid color-mix(in srgb,var(--yellow) 30%,transparent);
+    }
     /* ── 差分パネル ── */
     .diff-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
     .diff-panel h3 { font-size: 0.85rem; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
@@ -519,6 +533,64 @@
   </div>
 </div>
 
+<!-- ビヘイビア管理モーダル (Task R) -->
+<div class="modal-overlay hidden" id="td-modal">
+  <div class="modal-box" style="width:620px;max-width:98vw">
+    <h2 id="td-modal-title">ビヘイビア管理 — tap-dance</h2>
+
+    <!-- 一覧ビュー -->
+    <div id="td-list-view">
+      <div class="td-list" id="td-list"></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;margin-top:4px">
+        <button class="btn-primary" id="btn-td-new" style="font-size:0.78rem">＋ 新規作成</button>
+        <button class="btn-ghost" id="td-modal-close" style="font-size:0.78rem">閉じる</button>
+      </div>
+    </div>
+
+    <!-- 編集フォーム -->
+    <div id="td-edit-view" class="hidden">
+      <div id="td-edit-flash-warn" class="flash-caution hidden" style="margin-bottom:12px">
+        ⚠ tap-dance の変更はビルド後の手動フラッシュが必要です。
+        GitHubへのpush後、新ファームをビルドして実機にフラッシュしてください。
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label class="form-label">ビヘイビア名（C識別子）<span id="td-name-err" style="color:var(--red);font-size:0.72rem;margin-left:6px"></span></label>
+          <input type="text" id="td-name-input" placeholder="例: myTapDance" style="margin-bottom:0">
+        </div>
+        <div>
+          <label class="form-label">tapping-term-ms</label>
+          <input type="number" id="td-term-input" value="200" min="0" max="2000" style="margin-bottom:0">
+        </div>
+      </div>
+
+      <label class="form-label">タップ動作リスト（2件以上）</label>
+      <div class="td-actions-list" id="td-actions-list"></div>
+      <button class="btn-ghost" id="btn-td-action-add" style="font-size:0.76rem;margin-top:4px">＋ 動作を追加</button>
+
+      <div id="td-assign-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <label class="form-label">最初の割り当て先 <span style="color:var(--muted);font-weight:400">（新規作成時必須 — ID学習のため）</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+          <div>
+            <label class="form-label" style="font-size:0.7rem">レイヤー</label>
+            <select id="td-assign-layer" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-size:0.8rem"></select>
+          </div>
+          <div>
+            <label class="form-label" style="font-size:0.7rem">キー位置 (0〜)</label>
+            <input type="number" id="td-assign-key" min="0" value="0" style="margin-bottom:0">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn-ghost" id="btn-td-edit-cancel" style="font-size:0.78rem">キャンセル</button>
+        <button class="btn-primary" id="btn-td-edit-save" style="font-size:0.78rem">GitHubに保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- SHA競合モーダル -->
 <div class="modal-overlay hidden" id="sha-conflict-modal">
   <div class="modal-box">
@@ -608,6 +680,7 @@
         <button class="btn-ghost hidden" id="btn-read-device" style="font-size:0.75rem">📥 実機</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 4px"></div>
         <button class="btn-ghost" id="btn-combo" style="font-size:0.75rem" disabled>🔗 コンボ編集</button>
+        <button class="btn-ghost" id="btn-td-manager" style="font-size:0.75rem" disabled>🎵 ビヘイビア管理</button>
         <button class="btn-ghost" id="btn-write-device" style="font-size:0.75rem" disabled>⚡ 実機に書き込み</button>
         <div class="spacer"></div>
         <span class="change-badge hidden" id="change-badge"></span>
@@ -643,6 +716,11 @@
         <hr class="sp-divider" style="margin-bottom:8px">
         <div class="sp-label">ビルド</div>
         <span id="build-status" style="font-size:0.74rem"></span>
+      </div>
+      <!-- R-4: フラッシュ待ちCaution (非表示→TD保存後に表示) -->
+      <div class="hidden" id="sp-flash-section">
+        <hr class="sp-divider" style="margin-bottom:8px">
+        <div id="sp-flash-caution" class="flash-caution"></div>
       </div>
     </aside>
   </div>
@@ -775,6 +853,7 @@ const S = {
   diffItems:    [],        // 実機/GitHub 差分一覧（差分パネル用）
   unparsableItems: [],     // GitHub側構文が解析不能なキー一覧（差分/適用対象から除外）
   idToBeh:      {},        // 最後の GetKeymap から得た behaviorId→名前マップ
+  behIdMap:     {},        // R-4: 学習済み behavior 名→ID マップ（フラッシュ待ち判定用）
   building:     false,     // GitHub Actions ビルド中ロック状態
   buildPollToken: 0,       // インクリメントで実行中ポーラーをキャンセル
   dataSource:   null,      // 現在表示中のデータ源 { type:'github'|'device', at?:Date }
@@ -2056,6 +2135,7 @@ document.getElementById('btn-disconnect').addEventListener('click', async () => 
   document.getElementById('btn-read-device').classList.add('hidden');
   document.getElementById('btn-write-device').disabled = true;
   document.getElementById('btn-combo').disabled = true;
+  // btn-td-manager は接続不要なので disabled にしない（keymapRaw があれば動く）
   log('切断しました', 'log-warn');
   updateSyncBadge();
 });
@@ -2305,6 +2385,7 @@ function setBuildLock(locked) {
     btn.disabled = locked;
     btn.title    = locked ? 'ビルド中のため保存できません' : '';
   }
+  updateFlashWaitStatus(); // R-4: ビルド中/完了でCaution文言を切替
 }
 
 function showBuildStatus(state, text) {
@@ -2573,7 +2654,8 @@ async function loadFromDevice() {
 
     // 4. S.layers に反映し、GitHub との差分を S.edits に記録
     S.edits = {};
-    S.idToBeh = idToBeh;
+    S.idToBeh  = idToBeh;
+    S.behIdMap = behIdMap; // R-4: フラッシュ待ち判定用に保存
 
     // 差分一覧・解析不能一覧を構築（差分パネル用）
     const diffItems = [];
@@ -2599,6 +2681,8 @@ async function loadFromDevice() {
             canApply = true;
           } else if (conflictNames.has(parsed.beh)) {
             reason = 'behavior ID 未確定（矛盾）';
+          } else if (parsed.isCustom) {
+            reason = '適用不可（フラッシュ待ち）';
           } else {
             reason = 'behavior ID 未確定';
           }
@@ -2616,6 +2700,7 @@ async function loadFromDevice() {
     updateChangeBadge();
     updateSyncBadge();
     log(`✓ 実機読み込み完了 — デコード: ${decoded} キー / 不明 behavior: ${unknown} キー`, 'log-ok');
+    updateFlashWaitStatus();
 
     if (diffItems.length > 0) log(`  GitHub との差分: ${diffItems.length} 件`, 'log-warn');
     if (unparsableItems.length > 0) log(`  解析不能（アプリ側未対応の構文）: ${unparsableItems.length} 件`, 'log-warn');
@@ -2659,7 +2744,9 @@ function renderDiffPanel() {
       <td>${d.devBinding}</td>
       <td>${d.canApply
         ? '<span class="diff-ok">✓ 適用可</span>'
-        : `<span class="diff-na">✕ 適用不可${d.reason ? ` — ${d.reason}` : ''}</span>`}</td>
+        : d.reason.includes('フラッシュ')
+          ? `<span class="diff-na" style="color:var(--yellow)">⏳ ${d.reason}</span>`
+          : `<span class="diff-na">✕ 適用不可${d.reason ? ` — ${d.reason}` : ''}</span>`}</td>
     </tr>
   `).join('');
 
@@ -3088,6 +3175,8 @@ async function loadData() {
     renderKeyboard();
     updateChangeBadge();
     if (S.transport) document.getElementById('btn-combo').disabled = false;
+    document.getElementById('btn-td-manager').disabled = false;
+    updateFlashWaitStatus();
 
     const wasFirst = S.dataSource === null;
     S.dataSource = { type: 'github' };
@@ -3354,6 +3443,380 @@ document.getElementById('kb-modal-save').addEventListener('click', () => {
   loadData();
   checkAndResumeBuild().catch(() => {});
 });
+
+// ─────────────────────────────────────────────
+// Task R: tap-dance ビヘイビア管理
+// ─────────────────────────────────────────────
+
+// behaviors {} ブロックから tap-dance ノードを解析
+function parseTapDances(raw) {
+  if (!raw) return [];
+  const behIdx = raw.indexOf('behaviors {');
+  if (behIdx === -1) return [];
+
+  let depth = 0, behEnd = -1;
+  for (let i = behIdx; i < raw.length; i++) {
+    if (raw[i] === '{') depth++;
+    else if (raw[i] === '}' && --depth === 0) { behEnd = i; break; }
+  }
+  if (behEnd === -1) return [];
+
+  const block = raw.slice(behIdx, behEnd + 1);
+  const tds = [];
+  // nodeName: nodeAlias { ... }; — ネストなし前提でOK
+  const nodeRe = /(\w+)\s*:\s*\w+\s*\{([^{}]*)\}/g;
+  let m;
+  while ((m = nodeRe.exec(block)) !== null) {
+    const name = m[1];
+    const body = m[2];
+    const compatM = body.match(/compatible\s*=\s*"([^"]+)"/);
+    if (!compatM || compatM[1] !== 'zmk,behavior-tap-dance') continue;
+    const termM = body.match(/tapping-term-ms\s*=\s*<(\d+)>/);
+    const tappingTermMs = termM ? parseInt(termM[1]) : 200;
+    const bindingsM = body.match(/bindings\s*=\s*(<[^>]*>(?:\s*,\s*<[^>]*>)*)/);
+    const actions = [];
+    if (bindingsM) {
+      const bRe = /<([^>]+)>/g; let bm;
+      while ((bm = bRe.exec(bindingsM[1])) !== null) actions.push(bm[1].trim());
+    }
+    // keymap ブロック内での使用数
+    const keymapIdx = raw.indexOf('keymap {');
+    const keymapPart = keymapIdx >= 0 ? raw.slice(keymapIdx) : '';
+    const esc = `&${name}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const cnt = (keymapPart.match(new RegExp(esc, 'g')) || []).length;
+    tds.push({ name, tappingTermMs, actions, keyCount: cnt });
+  }
+  return tds;
+}
+
+// tap-dance DTS ノード文字列を生成
+function buildTdNode(name, tappingTermMs, actions) {
+  const bindingsLine = actions.map(a => `<${a}>`).join(', ');
+  return `\t\t${name}: ${name} {\n` +
+         `\t\t\tcompatible = "zmk,behavior-tap-dance";\n` +
+         `\t\t\t#binding-cells = <0>;\n` +
+         `\t\t\tbindings = ${bindingsLine};\n` +
+         (tappingTermMs !== 200 ? `\t\t\ttapping-term-ms = <${tappingTermMs}>;\n` : '') +
+         `\t\t};`;
+}
+
+// behaviors {} ブロック内に TD ノードを挿入または置換
+function insertOrReplaceTdInBehaviors(raw, name, nodeText) {
+  const behIdx = raw.indexOf('behaviors {');
+  if (behIdx === -1) return raw + '\n\tbehaviors {\n' + nodeText + '\n\t};\n';
+
+  let depth = 0, behEnd = -1;
+  for (let i = behIdx; i < raw.length; i++) {
+    if (raw[i] === '{') depth++;
+    else if (raw[i] === '}' && --depth === 0) { behEnd = i; break; }
+  }
+  if (behEnd === -1) return raw;
+
+  const behBlock = raw.slice(behIdx, behEnd);
+  // 既存ノードを検索（nodeName: nodeName { ... };）
+  const existRe = new RegExp(`(\\t*)${name}\\s*:\\s*${name}\\s*\\{[^{}]*\\}\\s*;`, 'm');
+  if (existRe.test(behBlock)) {
+    // 置換
+    const newBlock = behBlock.replace(existRe, nodeText);
+    return raw.slice(0, behIdx) + newBlock + raw.slice(behEnd);
+  } else {
+    // 挿入（behaviors { の直後）
+    const openBrace = raw.indexOf('{', behIdx);
+    return raw.slice(0, openBrace + 1) + '\n' + nodeText + '\n' + raw.slice(openBrace + 1);
+  }
+}
+
+// 全既存 behavior/macro 名を収集（重複チェック用）
+function collectExistingBehaviorNames(raw) {
+  const names = new Set();
+  const re = /(\w+)\s*:\s*\w+\s*\{/g; let m;
+  while ((m = re.exec(raw)) !== null) names.add(m[1]);
+  return names;
+}
+
+// R-4: フラッシュ待ち tap-dance 一覧を返す（ID未学習のカスタムビヘイビア）
+function getFlashWaitTds() {
+  if (!S.keymapRaw) return [];
+  const tds = parseTapDances(S.keymapRaw);
+  return tds.filter(td => !(td.name in S.behIdMap));
+}
+
+// R-4: ステータスパネルのフラッシュ待ち表示を更新
+function updateFlashWaitStatus() {
+  const sec = document.getElementById('sp-flash-section');
+  const el  = document.getElementById('sp-flash-caution');
+  if (!sec || !el) return;
+  const flashTds = getFlashWaitTds();
+  if (flashTds.length === 0) { sec.classList.add('hidden'); return; }
+  sec.classList.remove('hidden');
+  const names = flashTds.map(t => `「${t.name}」`).join('・');
+  if (S.building) {
+    el.textContent = `⏳ ${names} をビルド中です`;
+  } else {
+    el.textContent = `⚠ ビルド完了。実機反映には新ファームの手動フラッシュが必要です。フラッシュまで実機への割り当ては不可です。(${names})`;
+  }
+}
+
+// ─── TD 管理 UI ───
+
+let _tdIsNew = false;
+let _tdOrigName = null;
+
+function openTdManager() {
+  if (!S.keymapRaw) return;
+  _tdIsNew = false;
+  _tdOrigName = null;
+  document.getElementById('td-modal-title').textContent = 'ビヘイビア管理 — tap-dance';
+  showTdListView();
+  document.getElementById('td-modal').classList.remove('hidden');
+}
+
+function showTdListView() {
+  document.getElementById('td-list-view').classList.remove('hidden');
+  document.getElementById('td-edit-view').classList.add('hidden');
+  renderTdList();
+}
+
+function renderTdList() {
+  const list = document.getElementById('td-list');
+  const tds = parseTapDances(S.keymapRaw || '');
+  if (tds.length === 0) {
+    list.innerHTML = '<p style="font-size:0.78rem;color:var(--muted);padding:6px 0">tap-dance ビヘイビアなし</p>';
+    return;
+  }
+  const flashNames = new Set(getFlashWaitTds().map(t => t.name));
+  list.innerHTML = tds.map(td => {
+    const flashBadge = flashNames.has(td.name)
+      ? '<span style="font-size:0.66rem;background:rgba(210,153,34,0.15);color:var(--yellow);padding:1px 6px;border-radius:8px;margin-left:6px">フラッシュ待ち</span>'
+      : '';
+    return `<div class="td-row">
+      <div>
+        <div class="td-row-name">&amp;${td.name}${flashBadge}</div>
+        <div class="td-row-info">タップ数: ${td.actions.length} / tapping-term: ${td.tappingTermMs}ms / 割り当て: ${td.keyCount}箇所</div>
+        <div class="td-row-info" style="font-family:Consolas;font-size:0.7rem;color:var(--muted)">${td.actions.join(' → ')}</div>
+      </div>
+      <button class="btn-ghost" data-td-edit="${td.name}" style="font-size:0.72rem;padding:3px 8px">編集</button>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-td-edit]').forEach(btn => {
+    btn.addEventListener('click', () => openTdEdit(btn.dataset.tdEdit));
+  });
+}
+
+function openTdEdit(name) {
+  const tds = parseTapDances(S.keymapRaw || '');
+  const td = name ? tds.find(t => t.name === name) : null;
+  _tdIsNew = !td;
+  _tdOrigName = td ? td.name : null;
+
+  document.getElementById('td-list-view').classList.add('hidden');
+  document.getElementById('td-edit-view').classList.remove('hidden');
+  document.getElementById('td-modal-title').textContent = td ? `編集: &${td.name}` : '新規 tap-dance を作成';
+  document.getElementById('td-edit-flash-warn').classList.remove('hidden');
+
+  document.getElementById('td-name-input').value = td ? td.name : '';
+  document.getElementById('td-name-input').disabled = !!td; // 既存は名前変更不可
+  document.getElementById('td-term-input').value = td ? td.tappingTermMs : 200;
+  document.getElementById('td-name-err').textContent = '';
+
+  // レイヤーセレクト
+  const assignSection = document.getElementById('td-assign-section');
+  assignSection.classList.toggle('hidden', !_tdIsNew);
+  if (_tdIsNew) {
+    const sel = document.getElementById('td-assign-layer');
+    sel.innerHTML = S.layers.map((l, i) => `<option value="${i}">${i}: ${l.name}</option>`).join('');
+    document.getElementById('td-assign-key').value = 0;
+  }
+
+  // アクションリスト
+  const actions = td ? [...td.actions] : ['&kp A', '&kp B'];
+  renderTdActionList(actions);
+}
+
+function renderTdActionList(actions) {
+  const container = document.getElementById('td-actions-list');
+  container.innerHTML = actions.map((a, i) => `
+    <div class="td-action-row">
+      <input type="text" value="${a}" data-td-action="${i}" placeholder="例: &amp;kp A" spellcheck="false">
+      <button class="btn-ghost" data-td-up="${i}" style="font-size:0.7rem;padding:2px 6px" title="上へ">↑</button>
+      <button class="btn-ghost" data-td-del="${i}" style="font-size:0.7rem;padding:2px 6px;color:var(--red)">✕</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-td-up]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.tdUp);
+      if (idx === 0) return;
+      const cur = getTdActions();
+      [cur[idx - 1], cur[idx]] = [cur[idx], cur[idx - 1]];
+      renderTdActionList(cur);
+    });
+  });
+  container.querySelectorAll('[data-td-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cur = getTdActions();
+      cur.splice(parseInt(btn.dataset.tdDel), 1);
+      renderTdActionList(cur);
+    });
+  });
+}
+
+function getTdActions() {
+  return [...document.getElementById('td-actions-list').querySelectorAll('[data-td-action]')]
+    .map(inp => inp.value.trim());
+}
+
+document.getElementById('btn-td-action-add').addEventListener('click', () => {
+  const cur = getTdActions();
+  cur.push('&kp A');
+  renderTdActionList(cur);
+});
+
+document.getElementById('btn-td-edit-cancel').addEventListener('click', showTdListView);
+
+document.getElementById('td-modal-close').addEventListener('click', () => {
+  document.getElementById('td-modal').classList.add('hidden');
+});
+
+document.getElementById('btn-td-new').addEventListener('click', () => openTdEdit(null));
+
+document.getElementById('btn-td-manager').addEventListener('click', openTdManager);
+
+// R-2: 名前バリデーション
+function validateTdName(name, isNew) {
+  if (!name) return '名前は必須です';
+  if (!/^[A-Za-z_]\w*$/.test(name)) return 'C識別子として有効な名前を入力してください';
+  if (isNew) {
+    const existing = collectExistingBehaviorNames(S.keymapRaw || '');
+    if (existing.has(name)) return `"${name}" は既に存在します`;
+  }
+  return '';
+}
+
+// R-3: 保存
+document.getElementById('btn-td-edit-save').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-td-edit-save');
+  const name = document.getElementById('td-name-input').value.trim();
+  const termMs = parseInt(document.getElementById('td-term-input').value) || 200;
+  const actions = getTdActions();
+
+  // バリデーション
+  const nameErr = validateTdName(name, _tdIsNew);
+  document.getElementById('td-name-err').textContent = nameErr;
+  if (nameErr) return;
+  if (actions.length < 2) { log('タップ動作は2件以上必要です', 'log-warn'); return; }
+  for (const a of actions) {
+    if (!a.startsWith('&')) { log(`動作 "${a}" は & で始まる必要があります`, 'log-warn'); return; }
+  }
+
+  // 新規作成時: 割り当て先チェック
+  let assignLayerIdx = null, assignKeyIdx = null;
+  if (_tdIsNew) {
+    assignLayerIdx = parseInt(document.getElementById('td-assign-layer').value);
+    assignKeyIdx   = parseInt(document.getElementById('td-assign-key').value);
+    const layer = S.layers[assignLayerIdx];
+    if (!layer) { log('レイヤーが無効です', 'log-warn'); return; }
+    if (assignKeyIdx < 0 || assignKeyIdx >= layer.bindings.length) {
+      log(`キー位置 ${assignKeyIdx} はレイヤー ${assignLayerIdx} の範囲外です (0〜${layer.bindings.length - 1})`, 'log-warn');
+      return;
+    }
+  }
+
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  try {
+    if (!S.pat) { log('PAT が設定されていません', 'log-error'); return; }
+
+    // 1. DTS ノード生成
+    const nodeText = buildTdNode(name, termMs, actions);
+
+    // 2. behaviors ブロックに挿入/置換
+    let newContent = insertOrReplaceTdInBehaviors(S.keymapRaw, name, nodeText);
+
+    // 3. 新規作成時: 割り当て先の bindings も更新
+    if (_tdIsNew && assignLayerIdx !== null) {
+      const layer = S.layers[assignLayerIdx];
+      const newBindings = [...layer.originalBindings];
+      newBindings[assignKeyIdx] = `&${name}`;
+      newContent = replaceLayerBindings(newContent, layer.name, newBindings);
+    }
+
+    // 4. バリデーション (N-3 拡張)
+    const syntaxErrors = validateKeymapWithTd(newContent, S.layers, name);
+    if (syntaxErrors.length > 0) {
+      log('⛔ 構文チェックエラー:', 'log-error');
+      syntaxErrors.forEach(e => log('  ' + e, 'log-error'));
+      return;
+    }
+
+    // 5. SHA 競合チェック
+    const { sha: latestSha } = await ghGetFile(S.kb.keymapPath);
+    if (latestSha !== S.keymapSha) {
+      log('⚠ GitHub上でファイルが変更されています。再読み込み後にやり直してください', 'log-warn');
+      return;
+    }
+
+    // 6. GitHub push
+    const verb = _tdIsNew ? '追加' : '更新';
+    const commitMsg = `behaviors: ${verb} tap-dance &${name} via zmk-keymap-sync`;
+    const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, commitMsg);
+    log(`✓ &${name} を GitHub に保存しました`, 'log-ok');
+    log('⚠ 実機反映にはビルド後の手動フラッシュが必要です', 'log-warn');
+    log('  新ファームをフラッシュ後、「実機」ボタンで逆読み込みするとID学習できます', 'log-info');
+
+    // 7. 状態更新
+    S.keymapSha = putResult.content.sha;
+    S.keymapRaw = newContent;
+    S.layers = parseKeymap(newContent);
+    if (_tdIsNew && assignLayerIdx !== null) {
+      // 編集中の layer にも反映
+      S.layers[assignLayerIdx].bindings[assignKeyIdx] = `&${name}`;
+      S.layers[assignLayerIdx].dirty = true;
+      S.edits[`${assignLayerIdx}:${assignKeyIdx}`] = `&${name}`;
+    }
+    renderLayerTabs();
+    renderKeyboard();
+    updateChangeBadge();
+    updateFlashWaitStatus();
+
+    // ビルド監視開始
+    const commitSha = putResult.commit.sha;
+    setBuildLock(true);
+    pollBuildStatus(commitSha).catch(e => {
+      log(`ビルド監視エラー: ${e.message}`, 'log-warn');
+      setBuildLock(false);
+    });
+
+    document.getElementById('td-modal').classList.add('hidden');
+
+  } catch (err) {
+    log(`保存エラー: ${err.message}`, 'log-error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'GitHubに保存';
+  }
+});
+
+// N-3 拡張: TD ノードの構文チェック（TD保存時専用）
+function validateKeymapWithTd(content, originalLayers, tdName) {
+  const errors = validateKeymap(content, originalLayers);
+  // TD ノード存在確認
+  if (!content.includes(`compatible = "zmk,behavior-tap-dance"`)) {
+    errors.push('tap-dance ノードが見つかりません');
+  }
+  // #binding-cells = <0> の確認
+  const tdBlockRe = new RegExp(`${tdName}\\s*:\\s*${tdName}\\s*\\{([^{}]*)\\}`, 'm');
+  const tdM = tdBlockRe.exec(content);
+  if (tdM) {
+    if (!tdM[1].includes('#binding-cells = <0>')) errors.push(`&${tdName}: #binding-cells = <0> が必要です`);
+    if (!tdM[1].includes('bindings =')) errors.push(`&${tdName}: bindings が設定されていません`);
+  } else {
+    errors.push(`&${tdName} ノードが見つかりません`);
+  }
+  return errors;
+}
 
 // ─────────────────────────────────────────────
 // O-2: テーマ切替
