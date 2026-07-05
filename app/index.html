@@ -1677,7 +1677,7 @@ function parseBindingForRpc(str) {
 
   const btM = str.match(/^&bt\s+(\S+)(?:\s+(\d+))?$/);
   if (btM) {
-    const BT_ACTIONS = { BT_SEL:0, BT_NXT:1, BT_PRV:2, BT_CLR:3, BT_CLR_ALL:4 };
+    const BT_ACTIONS = { BT_CLR:0, BT_NXT:1, BT_PRV:2, BT_SEL:3, BT_CLR_ALL:4 };
     const action = BT_ACTIONS[btM[1]];
     if (action === undefined) return null;
     return { beh: 'bt', p1: action, p2: btM[2] !== undefined ? parseInt(btM[2]) : 0 };
@@ -2154,9 +2154,9 @@ function deviceBindingToString(behName, param1, param2, reverseKp) {
       return `&mkp ${BTN.get(param1) ?? param1}`;
     }
     case 'bt': {
-      const ACTS = new Map([[0,'BT_SEL'],[1,'BT_NXT'],[2,'BT_PRV'],[3,'BT_CLR'],[4,'BT_CLR_ALL']]);
+      const ACTS = new Map([[0,'BT_CLR'],[1,'BT_NXT'],[2,'BT_PRV'],[3,'BT_SEL'],[4,'BT_CLR_ALL']]);
       const act = ACTS.get(param1) ?? `BT_${param1}`;
-      return param1 === 0 ? `&bt ${act} ${param2}` : `&bt ${act}`;
+      return param1 === 3 ? `&bt ${act} ${param2}` : `&bt ${act}`;
     }
     default: return null;
   }
