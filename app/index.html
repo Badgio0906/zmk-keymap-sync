@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>ZMK Keymap Sync — roBa</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23818cf8'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white'%3E%E2%8C%A8%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -698,6 +701,7 @@
           </select>
         </div>
       </div>
+      <div id="ht-flavor-desc" style="font-size:0.71rem;color:var(--muted);background:var(--surface2);border-radius:6px;padding:6px 10px;margin-bottom:10px;line-height:1.5"></div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
@@ -770,7 +774,7 @@
 
 <!-- ヘッダー -->
 <header>
-  <h1 style="font-size:0.95rem;white-space:nowrap;">ZMK Keymap Sync</h1>
+  <h1 style="font-size:0.95rem;white-space:nowrap;">ZMK Keymap Sync<span id="build-id" style="font-size:0.6rem;color:var(--muted);font-weight:400;margin-left:8px;letter-spacing:0.01em">__BUILD_ID__</span></h1>
 
   <!-- キーボード切替 -->
   <div class="kb-switcher" id="kb-switcher">
@@ -4401,6 +4405,7 @@ function openHtEdit(name) {
   document.getElementById('ht-name-input').value = ht ? ht.name : '';
   document.getElementById('ht-name-input').disabled = !!ht;
   document.getElementById('ht-flavor-input').value = ht ? ht.flavor : 'tap-preferred';
+  updateHtFlavorDesc();
   document.getElementById('ht-term-input').value = ht ? ht.tappingTermMs : 200;
   document.getElementById('ht-quick-input').value = ht && ht.quickTapMs ? ht.quickTapMs : '';
   document.getElementById('ht-idle-input').value = ht && ht.priorIdleMs ? ht.priorIdleMs : '';
@@ -4553,6 +4558,20 @@ document.getElementById('btn-td-delete-ok').addEventListener('click', executeTdD
 
 document.getElementById('btn-td-manager').addEventListener('click', openTdManager);
 
+// ─── Y-3: flavor 説明 ───
+const HT_FLAVOR_DESC = {
+  'tap-preferred':          'ホールド中に別キーを押してもタップとみなす。文字入力重視のレイアウトに向く。',
+  'hold-preferred':         '別キーと同時押しになると即ホールド判定。修飾キー専用に向く（誤タップが出にくい）。',
+  'balanced':               'タップ中に別キーを押してリリースするとホールド判定。タップ/ホールドのバランスが良い汎用設定。',
+  'tap-unless-interrupted': '別キーが割り込まない限りタップ。割り込まれるとホールド。タイピング中の誤爆を防ぎやすい。',
+};
+function updateHtFlavorDesc() {
+  const sel  = document.getElementById('ht-flavor-input');
+  const desc = document.getElementById('ht-flavor-desc');
+  if (!sel || !desc) return;
+  desc.textContent = HT_FLAVOR_DESC[sel.value] || '';
+}
+
 // ─── HT 管理 UI イベントリスナー ───
 document.getElementById('btn-ht-new').addEventListener('click', () => openHtEdit(null));
 
@@ -4577,6 +4596,8 @@ const htModInput = document.getElementById('ht-mod-input');
 if (htModInput) htModInput.addEventListener('input', updateHtAssignPreview);
 const htTapInput = document.getElementById('ht-tap-input');
 if (htTapInput) htTapInput.addEventListener('input', updateHtAssignPreview);
+const htFlavorInput = document.getElementById('ht-flavor-input');
+if (htFlavorInput) htFlavorInput.addEventListener('change', updateHtFlavorDesc);
 const htNameInput = document.getElementById('ht-name-input');
 if (htNameInput) htNameInput.addEventListener('input', updateHtAssignPreview);
 

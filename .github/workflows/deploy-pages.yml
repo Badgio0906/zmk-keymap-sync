@@ -25,6 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Inject build ID
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%d")
+          sed -i "s/__BUILD_ID__/${SHORT_SHA} (${BUILD_DATE})/g" app/index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
