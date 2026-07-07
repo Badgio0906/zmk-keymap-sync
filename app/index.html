@@ -4041,7 +4041,7 @@ async function executeTdDelete() {
   }
 }
 
-// R-4 / X-2: フラッシュ待ちビヘイビア一覧を返す（TD + HT 両方）
+// R-4 / X-2: ID未学習のカスタムビヘイビア全件（バッジ・グレーアウト用）
 function getFlashWaitBehaviors() {
   if (!S.keymapRaw) return [];
   const tds = parseTapDances(S.keymapRaw);
@@ -4051,12 +4051,23 @@ function getFlashWaitBehaviors() {
 // 後方互換エイリアス
 function getFlashWaitTds() { return getFlashWaitBehaviors(); }
 
+// Z: S.layers で実際に使われているかを確認（keymapRaw ではなく live bindings を参照）
+function isBehAssignedInLayers(name) {
+  if (!S.layers) return false;
+  return S.layers.some(layer =>
+    layer.bindings.some(b => b === `&${name}` || b.startsWith(`&${name} `))
+  );
+}
+
 // R-4: ステータスパネルのフラッシュ待ち表示を更新
+// Z: cautionは「ID未学習 かつ 実際にキーに割り当て済み」のものだけ対象にする
 function updateFlashWaitStatus() {
   const sec = document.getElementById('sp-flash-section');
   const el  = document.getElementById('sp-flash-caution');
   if (!sec || !el) return;
-  const flashBehs = getFlashWaitBehaviors();
+  // getFlashWaitBehaviors() はグレーアウト等で使うので変えない;
+  // caution は割り当て済みのものだけに絞る
+  const flashBehs = getFlashWaitBehaviors().filter(b => isBehAssignedInLayers(b.name));
   if (flashBehs.length === 0) { sec.classList.add('hidden'); return; }
   sec.classList.remove('hidden');
   const names = flashBehs.map(t => `「${t.name}」`).join('・');
@@ -4298,7 +4309,7 @@ function renderTdList() {
     return `<div class="td-row">
       <div>
         <div class="td-row-name">&amp;${td.name}${flashBadge}</div>
-        <div class="td-row-info">タップ数: ${td.actions.length} / tapping-term: ${td.tappingTermMs}ms / 割り当て: ${td.keyCount}箇所</div>
+        <div class="td-row-info">タップ数: ${td.actions.length} / tapping-term: ${td.tappingTermMs}ms / 割り当て: ${td.keyCount > 0 ? `${td.keyCount}箇所` : '<span style="color:var(--muted);font-style:italic">未使用</span>'}</div>
         <div class="td-row-info" style="font-family:Consolas;font-size:0.7rem;color:var(--muted)">${td.actions.join(' → ')}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
@@ -4342,7 +4353,7 @@ function renderHtList() {
     return `<div class="td-row">
       <div>
         <div class="td-row-name">&amp;${ht.name}${flashBadge}</div>
-        <div class="td-row-info">flavor: ${ht.flavor} / tapping-term: ${ht.tappingTermMs}ms${extras.length ? ' / ' + extras.join(' / ') : ''} / 割り当て: ${ht.keyCount}箇所</div>
+        <div class="td-row-info">flavor: ${ht.flavor} / tapping-term: ${ht.tappingTermMs}ms${extras.length ? ' / ' + extras.join(' / ') : ''} / 割り当て: ${ht.keyCount > 0 ? `${ht.keyCount}箇所` : '<span style="color:var(--muted);font-style:italic">未使用</span>'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         <button class="btn-ghost" data-ht-edit="${ht.name}" style="font-size:0.7rem;padding:3px 7px">編集</button>
