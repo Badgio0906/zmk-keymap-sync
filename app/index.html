@@ -440,6 +440,12 @@
     .key.td-assigned { background: rgba(129,140,248,0.18) !important; border-color: var(--accent) !important; }
     .key.td-assigned .key-label { color: var(--accent) !important; font-weight: 700; }
 
+    /* AA-1: コンボキーピックモード */
+    .keyboard-canvas.combo-pick-mode .key { cursor: crosshair !important; }
+    .keyboard-canvas.combo-pick-mode .key:hover { background: rgba(251,191,36,0.18) !important; border-color: #fbbf24 !important; }
+    .key.combo-pick-selected { background: rgba(251,191,36,0.28) !important; border-color: #fbbf24 !important; outline: 2px solid #fbbf24; outline-offset: 1px; }
+    .key.combo-pick-selected .key-label { color: #fbbf24 !important; font-weight: 700; }
+
     /* T-2: 割り当てプレビュー */
     .assign-preview { margin-top:8px; padding:7px 9px; border-radius:6px; background: var(--surface2); border: 1px solid var(--border); font-size:0.76rem; line-height:1.6; }
     .assign-preview code { font-family: Consolas,monospace; color: var(--accent); }
@@ -449,9 +455,11 @@
 </head>
 <body>
 
-<!-- T-1: キーピックバナー -->
+<!-- T-1 / AA-1: キーピックバナー -->
 <div id="key-pick-banner" class="key-pick-banner hidden">
-  <span>⌨ 割り当て先のキーをクリックしてください。レイヤータブでレイヤー切替も可能です</span>
+  <span id="kpb-td-msg">⌨ 割り当て先のキーをクリックしてください。レイヤータブでレイヤー切替も可能です</span>
+  <span id="kpb-combo-msg" class="hidden" style="display:none">⌨ コンボキーをクリックして選択/解除 &nbsp;—&nbsp; <strong id="kpb-combo-count">0 個選択</strong></span>
+  <button class="btn-ghost hidden" id="btn-combo-pick-done" style="display:none;background:rgba(255,255,255,0.15);font-weight:600">✓ 選択完了</button>
   <button class="btn-ghost" id="btn-key-pick-cancel">✕ キャンセル</button>
 </div>
 
@@ -1355,7 +1363,8 @@ function renderKeyboard() {
   canvas.style.width  = Math.ceil(maxX * KS) + 'px';
   canvas.style.height = Math.ceil(maxY * KS) + 'px';
   canvas.innerHTML = '';
-  canvas.classList.toggle('key-pick-mode', keyPickMode); // T-1
+  canvas.classList.toggle('key-pick-mode', keyPickMode);     // T-1
+  canvas.classList.toggle('combo-pick-mode', comboPickMode); // AA-1
 
   // T-3: 編集中の TD 名を取得（割り当て済みキーをハイライト）
   const tdEditView = document.getElementById('td-edit-view');
@@ -1375,6 +1384,8 @@ function renderKeyboard() {
     if (tdHighlightName && (
       binding === `&${tdHighlightName}` || binding.startsWith(`&${tdHighlightName} `)
     )) keyCls += ' td-assigned';
+    // AA-1: コンボピックモードで選択済みキーをハイライト
+    if (comboPickMode && _comboPickSelected.has(idx)) keyCls += ' combo-pick-selected';
     div.className = keyCls;
     div.style.left   = (kp.x * KS) + 'px';
     div.style.top    = (kp.y * KS) + 'px';
@@ -1394,9 +1405,14 @@ function renderKeyboard() {
     div.appendChild(span);
     div.title    = binding;
     div.dataset.idx = idx;
-    // T-1: ピックモード中は割り当て先確定、通常モードはキー編集
+    // AA-1: コンボピック / T-1: TD/HT 単一ピック / 通常: キー編集
     div.addEventListener('click', () => {
-      if (keyPickMode) {
+      if (comboPickMode) {
+        if (_comboPickSelected.has(idx)) _comboPickSelected.delete(idx);
+        else _comboPickSelected.add(idx);
+        updateComboPickBanner();
+        renderKeyboard();
+      } else if (keyPickMode) {
         endKeyPick(S.currentLayer, idx);
       } else {
         openKeyEdit(idx, binding);
@@ -1466,7 +1482,11 @@ const M = { beh:null, kpKey:null, ltLayer:null, ltKey:null,
             mtMod:null, mtKey:null, mkpBtn:null, btAction:null, btIdx:0 };
 
 let editingKeyIdx = null;
-let keyPickMode = false; // T-1: キーボードからの割り当て先選択モード
+let keyPickMode = false;   // T-1: TD/HT 単一キー選択モード
+let comboPickMode = false; // AA-1: コンボ複数キー選択モード
+let _comboPickRowIdx = null;
+let _comboPickSelected = new Set();
+let _comboPickOriginalValue = '';
 
 // キーボード HTML を生成
 function buildKbdHTML(fieldTag, activeKey) {
@@ -3485,7 +3505,10 @@ function renderComboList() {
       </div>
       <div>
         <label>キー位置 (例: 0 1)</label>
-        <input type="text" value="${c.positions}" data-field="positions" data-idx="${i}">
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="text" value="${c.positions}" data-field="positions" data-idx="${i}" style="flex:1;min-width:0;margin-bottom:0">
+          <button class="btn-ghost" data-combo-pick="${i}" title="キーボードから選択" style="font-size:0.68rem;padding:3px 7px;white-space:nowrap;flex-shrink:0">⌨</button>
+        </div>
       </div>
       <div>
         <label>バインディング (例: &amp;kp ESC)</label>
@@ -3506,6 +3529,10 @@ function renderComboList() {
       renderComboList();
     });
   });
+  // AA-1: コンボキーピック開始
+  list.querySelectorAll('[data-combo-pick]').forEach(btn => {
+    btn.addEventListener('click', () => startComboPick(parseInt(btn.dataset.comboPick)));
+  });
 }
 
 document.getElementById('btn-combo').addEventListener('click', () => {
@@ -3522,6 +3549,58 @@ document.getElementById('btn-combo-add').addEventListener('click', () => {
   editingCombos.push({ name: `combo_${editingCombos.length}`, timeout: '50', positions: '0 1', binding: '&kp ESC', layers: '' });
   renderComboList();
 });
+
+// ─── AA-1: コンボ複数キーピック ───
+
+function startComboPick(rowIdx) {
+  _comboPickRowIdx = rowIdx;
+  _comboPickOriginalValue = editingCombos[rowIdx].positions;
+  // 現在の positions 文字列から初期選択セットを構築
+  _comboPickSelected = new Set(
+    _comboPickOriginalValue.trim().split(/\s+/).filter(s => s !== '').map(Number).filter(n => !isNaN(n))
+  );
+  comboPickMode = true;
+  // コンボモーダルを隠してバナーをコンボモードで表示
+  document.getElementById('combo-modal').classList.add('hidden');
+  document.getElementById('kpb-td-msg').style.display = 'none';
+  document.getElementById('kpb-combo-msg').style.display = '';
+  document.getElementById('btn-combo-pick-done').style.display = '';
+  document.getElementById('key-pick-banner').classList.remove('hidden');
+  updateComboPickBanner();
+  renderKeyboard();
+}
+
+function updateComboPickBanner() {
+  const el = document.getElementById('kpb-combo-count');
+  if (!el) return;
+  if (_comboPickSelected.size === 0) {
+    el.textContent = '0 個選択';
+  } else {
+    const sorted = [..._comboPickSelected].sort((a, b) => a - b);
+    el.textContent = `${_comboPickSelected.size} 個選択: ${sorted.join(', ')}`;
+  }
+}
+
+function endComboPick(confirm) {
+  comboPickMode = false;
+  // バナーを TD モードに戻して隠す
+  document.getElementById('kpb-td-msg').style.display = '';
+  document.getElementById('kpb-combo-msg').style.display = 'none';
+  document.getElementById('btn-combo-pick-done').style.display = 'none';
+  document.getElementById('key-pick-banner').classList.add('hidden');
+  document.getElementById('combo-modal').classList.remove('hidden');
+
+  if (confirm && _comboPickRowIdx !== null) {
+    const sorted = [..._comboPickSelected].sort((a, b) => a - b);
+    editingCombos[_comboPickRowIdx].positions = sorted.join(' ');
+    renderComboList();
+  }
+  _comboPickRowIdx = null;
+  _comboPickSelected = new Set();
+  renderKeyboard();
+}
+
+document.getElementById('btn-combo-pick-done').addEventListener('click', () => endComboPick(true));
 
 document.getElementById('combo-modal-ok').addEventListener('click', () => {
   if (!S.keymapRaw) return;
@@ -4260,11 +4339,17 @@ function updateAssignPreview() {
 }
 
 document.getElementById('btn-key-pick').addEventListener('click', startKeyPick);
-document.getElementById('btn-key-pick-cancel').addEventListener('click', () => endKeyPick(null, null));
+document.getElementById('btn-key-pick-cancel').addEventListener('click', () => {
+  if (comboPickMode) endComboPick(false);
+  else endKeyPick(null, null);
+});
 
 // Esc でピックモード終了
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && keyPickMode) endKeyPick(null, null);
+  if (e.key === 'Escape') {
+    if (comboPickMode) endComboPick(false);
+    else if (keyPickMode) endKeyPick(null, null);
+  }
 });
 
 // T-2: レイヤー・キー位置の変更でプレビューを更新
