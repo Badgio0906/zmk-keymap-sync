@@ -458,8 +458,8 @@
 <!-- T-1 / AA-1: キーピックバナー -->
 <div id="key-pick-banner" class="key-pick-banner hidden">
   <span id="kpb-td-msg">⌨ 割り当て先のキーをクリックしてください。レイヤータブでレイヤー切替も可能です</span>
-  <span id="kpb-combo-msg" class="hidden" style="display:none">⌨ コンボキーをクリックして選択/解除 &nbsp;—&nbsp; <strong id="kpb-combo-count">0 個選択</strong></span>
-  <button class="btn-ghost hidden" id="btn-combo-pick-done" style="display:none;background:rgba(255,255,255,0.15);font-weight:600">✓ 選択完了</button>
+  <span id="kpb-combo-msg" class="hidden">⌨ コンボキーをクリックして選択/解除 &nbsp;—&nbsp; <strong id="kpb-combo-count">0 個選択</strong></span>
+  <button class="btn-ghost hidden" id="btn-combo-pick-done" style="background:rgba(255,255,255,0.15);font-weight:600">✓ 選択完了</button>
   <button class="btn-ghost" id="btn-key-pick-cancel">✕ キャンセル</button>
 </div>
 
@@ -3562,9 +3562,9 @@ function startComboPick(rowIdx) {
   comboPickMode = true;
   // コンボモーダルを隠してバナーをコンボモードで表示
   document.getElementById('combo-modal').classList.add('hidden');
-  document.getElementById('kpb-td-msg').style.display = 'none';
-  document.getElementById('kpb-combo-msg').style.display = '';
-  document.getElementById('btn-combo-pick-done').style.display = '';
+  document.getElementById('kpb-td-msg').classList.add('hidden');
+  document.getElementById('kpb-combo-msg').classList.remove('hidden');
+  document.getElementById('btn-combo-pick-done').classList.remove('hidden');
   document.getElementById('key-pick-banner').classList.remove('hidden');
   updateComboPickBanner();
   renderKeyboard();
@@ -3584,9 +3584,9 @@ function updateComboPickBanner() {
 function endComboPick(confirm) {
   comboPickMode = false;
   // バナーを TD モードに戻して隠す
-  document.getElementById('kpb-td-msg').style.display = '';
-  document.getElementById('kpb-combo-msg').style.display = 'none';
-  document.getElementById('btn-combo-pick-done').style.display = 'none';
+  document.getElementById('kpb-td-msg').classList.remove('hidden');
+  document.getElementById('kpb-combo-msg').classList.add('hidden');
+  document.getElementById('btn-combo-pick-done').classList.add('hidden');
   document.getElementById('key-pick-banner').classList.add('hidden');
   document.getElementById('combo-modal').classList.remove('hidden');
 
