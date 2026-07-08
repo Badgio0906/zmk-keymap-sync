@@ -446,6 +446,14 @@
     .key.combo-pick-selected { background: rgba(251,191,36,0.28) !important; border-color: #fbbf24 !important; outline: 2px solid #fbbf24; outline-offset: 1px; }
     .key.combo-pick-selected .key-label { color: #fbbf24 !important; font-weight: 700; }
 
+    /* AC-3: コンボ関与キーバッジ */
+    .combo-badge {
+      position: absolute; top: 1px; right: 2px;
+      font-size: 0.55rem; line-height: 1; opacity: 0.75;
+      pointer-events: none; user-select: none;
+    }
+    .combo-badge.combo-badge-pending { opacity: 1; filter: drop-shadow(0 0 2px #fbbf24); }
+
     /* T-2: 割り当てプレビュー */
     .assign-preview { margin-top:8px; padding:7px 9px; border-radius:6px; background: var(--surface2); border: 1px solid var(--border); font-size:0.76rem; line-height:1.6; }
     .assign-preview code { font-family: Consolas,monospace; color: var(--accent); }
@@ -900,6 +908,16 @@
         <hr class="sp-divider" style="margin-bottom:8px">
         <div id="sp-beh-pending-caution" class="flash-caution" style="color:var(--yellow)"></div>
       </div>
+      <!-- AC-1: 未反映コンボ変更 Caution -->
+      <div class="hidden" id="sp-combo-pending-section">
+        <hr class="sp-divider" style="margin-bottom:8px">
+        <div id="sp-combo-pending-caution" class="flash-caution" style="color:var(--yellow)"></div>
+      </div>
+      <!-- AC-2: コンボ常時注記（コンボ存在時） -->
+      <div class="hidden" id="sp-combo-note-section">
+        <hr class="sp-divider" style="margin-bottom:8px">
+        <div style="font-size:0.69rem;color:var(--muted);line-height:1.55">※ コンボの動作確認は RPC では行えません。変更の反映にはビルド後の手動フラッシュが必要です。</div>
+      </div>
     </aside>
   </div>
 
@@ -1036,6 +1054,7 @@ const S = {
   buildPollToken: 0,       // インクリメントで実行中ポーラーをキャンセル
   dataSource:   null,      // 現在表示中のデータ源 { type:'github'|'device', at?:Date }
   behaviorPendingCount: 0, // X-1: ステージング済み・未 push の behavior 変更件数
+  comboPending: false,     // AC-1: コンボ「keymap に反映」済み・未 push
 };
 
 // ─────────────────────────────────────────────
@@ -1372,6 +1391,13 @@ function renderKeyboard() {
   const tdHighlightName = (tdEditView && !tdEditView.classList.contains('hidden') && tdNameInput)
     ? tdNameInput.value.trim() : null;
 
+  // AC-3: コンボ関与キー位置セット
+  const combos = parseCombos(S.keymapRaw || '');
+  const comboKeySet = new Set();
+  for (const c of combos) {
+    c.positions.trim().split(/\s+/).forEach(p => { const n = parseInt(p); if (!isNaN(n)) comboKeySet.add(n); });
+  }
+
   S.layoutKeys.forEach((kp, idx) => {
     const binding  = layer.bindings[idx] ?? '?';
     const editKey  = `${S.currentLayer}:${idx}`;
@@ -1403,6 +1429,13 @@ function renderKeyboard() {
     span.className = 'key-label' + (cls ? ' ' + cls : '');
     span.textContent = label;
     div.appendChild(span);
+    // AC-3: コンボ関与キーに 🔗 バッジを追加
+    if (comboKeySet.has(idx)) {
+      const badge = document.createElement('span');
+      badge.className = 'combo-badge' + (S.comboPending ? ' combo-badge-pending' : '');
+      badge.textContent = '🔗';
+      div.appendChild(badge);
+    }
     div.title    = binding;
     div.dataset.idx = idx;
     // AA-1: コンボピック / T-1: TD/HT 単一ピック / 通常: キー編集
@@ -2567,9 +2600,10 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 
   const hasEdits = Object.keys(S.edits).length > 0;
   const hasBehPending = S.behaviorPendingCount > 0;
+  const hasComboPending = S.comboPending;
 
   try {
-    if (!hasEdits && !hasBehPending) {
+    if (!hasEdits && !hasBehPending && !hasComboPending) {
       log('書き込む変更がありません。キーを編集してから保存してください', 'log-warn');
       return;
     }
@@ -2627,13 +2661,15 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 
     const changed   = S.layers.filter(l => l.dirty).map(l => l.name).join(', ');
     const behPart   = hasBehPending ? ' behaviors' : '';
-    const commitMsg = `keymap: update ${changed}${behPart} via zmk-keymap-sync`;
+    const comboPart = hasComboPending ? ' combos' : '';
+    const commitMsg = `keymap: update ${changed}${behPart}${comboPart} via zmk-keymap-sync`;
     const putResult = await ghPutFile(S.kb.keymapPath, newContent, S.keymapSha, commitMsg);
     log('✓ GitHub プッシュ完了 → GitHub Actions ビルド開始', 'log-ok');
     log(`  確認: https://github.com/${S.kb.owner}/${S.kb.repo}/actions`, 'log-info');
 
     S.edits = {};
     S.behaviorPendingCount = 0;
+    S.comboPending = false;
     for (const layer of S.layers) {
       layer.originalBindings = [...layer.bindings];
       layer.dirty = false;
@@ -2641,6 +2677,7 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     S.keymapSha = putResult.content.sha;
     S.keymapRaw = newContent;
     updateBehPendingStatus();
+    updateComboPendingStatus();
     renderLayerTabs();
     updateChangeBadge();
 
@@ -3313,8 +3350,11 @@ async function applyGithubToDevice() {
 document.getElementById('btn-apply-github-to-device').addEventListener('click', applyGithubToDevice);
 
 document.getElementById('btn-apply-device-to-github').addEventListener('click', () => {
-  if (S.behaviorPendingCount > 0) {
-    if (!confirm(`未反映のビヘイビア変更が ${S.behaviorPendingCount} 件あります。\n実機→GitHub 反映を続けると、それらはまとめて push されます。続けますか？`)) return;
+  if (S.behaviorPendingCount > 0 || S.comboPending) {
+    const parts = [];
+    if (S.behaviorPendingCount > 0) parts.push(`ビヘイビア変更 ${S.behaviorPendingCount} 件`);
+    if (S.comboPending) parts.push('コンボ変更');
+    if (!confirm(`未反映の${parts.join('・')}があります。\n実機→GitHub 反映を続けると、それらはまとめて push されます。続けますか？`)) return;
   }
   document.getElementById('diff-panel').classList.add('hidden');
   log('実機→GitHub 反映: 「保存 (GitHub + 実機)」ボタンを押して実行してください', 'log-info');
@@ -3605,10 +3645,12 @@ document.getElementById('btn-combo-pick-done').addEventListener('click', () => e
 document.getElementById('combo-modal-ok').addEventListener('click', () => {
   if (!S.keymapRaw) return;
   S.keymapRaw = reconstructWithCombos(S.keymapRaw, editingCombos);
+  S.comboPending = true;
   document.getElementById('combo-modal').classList.add('hidden');
   log(`コンボを keymap に反映しました（${editingCombos.length} 件）。「保存」で GitHub に push されます。`, 'log-ok');
-  // btn-save を表示（変更ありの扱い）
-  document.getElementById('btn-save').classList.remove('hidden');
+  updateComboPendingStatus();
+  renderKeyboard(); // AC-3: バッジ再描画
+  updateChangeBadge();
 });
 
 // ─────────────────────────────────────────────
@@ -3639,7 +3681,9 @@ async function loadData() {
     S.layers = parseKeymap(keymapRaw);
     S.edits  = {};
     S.behaviorPendingCount = 0;
+    S.comboPending = false;
     updateBehPendingStatus();
+    updateComboPendingStatus();
     log(`レイヤー: ${S.layers.length} 個`, 'log-ok');
     S.layers.forEach((l, i) =>
       log(`  Layer ${i}: ${l.name}  (${l.bindings.length} キー)`, 'log-info'));
@@ -3699,8 +3743,8 @@ function updateKbSwitcher() {
       if (e.target.closest('[data-kb-edit]')) return;
       const id = el.dataset.kbId;
       if (id === S.kb.id) { closeKbDropdown(); return; }
-      if (Object.keys(S.edits).length > 0 || S.behaviorPendingCount > 0) {
-        const cnt = Object.keys(S.edits).length + S.behaviorPendingCount;
+      if (Object.keys(S.edits).length > 0 || S.behaviorPendingCount > 0 || S.comboPending) {
+        const cnt = Object.keys(S.edits).length + S.behaviorPendingCount + (S.comboPending ? 1 : 0);
         if (!confirm(`未保存の変更が ${cnt} 件あります。キーボードを切り替えると変更は破棄されます。続けますか？`)) {
           closeKbDropdown();
           return;
@@ -3710,11 +3754,13 @@ function updateKbSwitcher() {
       S.kb = getActiveKb();
       S.layers = []; S.layoutKeys = []; S.keymapRaw = null; S.keymapSha = null; S.edits = {};
       S.behaviorPendingCount = 0;
+      S.comboPending = false;
       S.dataSource = null;
       S.buildPollToken++;
       setBuildLock(false);
       updateKbSwitcher();
       updateBehPendingStatus();
+      updateComboPendingStatus();
       closeKbDropdown();
       loadData();
       checkAndResumeBuild().catch(() => {});
@@ -4168,6 +4214,26 @@ function updateBehPendingStatus() {
   }
   sec.classList.remove('hidden');
   el.textContent = `⚠ 未反映のビヘイビア変更 ${S.behaviorPendingCount} 件（「💾 保存」でまとめて GitHub に push されます）`;
+}
+
+// AC-1/AC-2: ステータスパネル — コンボ未反映状態を更新
+function updateComboPendingStatus() {
+  const pendingSec = document.getElementById('sp-combo-pending-section');
+  const pendingEl  = document.getElementById('sp-combo-pending-caution');
+  if (pendingSec && pendingEl) {
+    if (S.comboPending) {
+      pendingSec.classList.remove('hidden');
+      pendingEl.textContent = '⚠ 未保存のコンボ変更があります（「💾 保存」で GitHub に push されます）';
+    } else {
+      pendingSec.classList.add('hidden');
+    }
+  }
+  // コンボ常時注記（コンボが1件でも存在する場合）
+  const noteSec = document.getElementById('sp-combo-note-section');
+  if (noteSec) {
+    const hasCombo = S.keymapRaw ? parseCombos(S.keymapRaw).length > 0 : false;
+    noteSec.classList.toggle('hidden', !hasCombo && !S.comboPending);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -5036,7 +5102,7 @@ window.addEventListener('resize', () => {
 
 // 未保存編集がある間は離脱を警告する
 window.addEventListener('beforeunload', (e) => {
-  if (Object.keys(S.edits).length > 0 || S.behaviorPendingCount > 0) {
+  if (Object.keys(S.edits).length > 0 || S.behaviorPendingCount > 0 || S.comboPending) {
     e.preventDefault();
     e.returnValue = '';
   }
