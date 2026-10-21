@@ -1933,6 +1933,41 @@ function normalizeBinding(raw) {
   return s.startsWith('&') ? s : null;
 }
 
+// AD-1: バインディング構文の簡易チェック（ビルド失敗の主因となる誤りを検出）
+// 戻り値: 問題点の配列（空なら問題なし）
+function checkBindingSyntax(binding) {
+  const problems = [];
+  const s = binding.trim();
+  if (!s.startsWith('&')) problems.push('& で始まる必要があります');
+
+  let depth = 0;
+  for (const ch of s) {
+    if (ch === '(') depth++;
+    else if (ch === ')' && --depth < 0) break;
+  }
+  if (depth !== 0) problems.push('括弧 ( ) の対応が取れていません');
+
+  // 関数形式トークン NAME(...) は ZMK の修飾子関数か keymap 内 #define マクロのみ許可
+  const allowed = new Set(['LC','LS','LA','LG','RC','RS','RA','RG','RGB_COLOR_HSB']);
+  for (const dm of (S.keymapRaw || '').matchAll(/#define\s+(\w+)\(/g)) allowed.add(dm[1]);
+  const HINTS = { WIN:'LG', GUI:'LG', CMD:'LG', META:'LG', CTRL:'LC', CTL:'LC', SHIFT:'LS', SFT:'LS', ALT:'LA', OPT:'LA' };
+  for (const fm of s.matchAll(/\b(\w+)\(/g)) {
+    const fn = fm[1];
+    if (allowed.has(fn)) continue;
+    const hint = HINTS[fn.toUpperCase()];
+    problems.push(`${fn}() は ZMK の修飾子関数ではありません` + (hint ? `（${hint}() を使用してください）` : '（LC/LS/LA/LG/RC/RS/RA/RG のみ）'));
+  }
+  return problems;
+}
+
+// AD-1: 問題があれば確認ダイアログを出し、続行するなら true
+function confirmBindingSyntax(binding, label) {
+  const problems = checkBindingSyntax(binding);
+  if (problems.length === 0) return true;
+  problems.forEach(p => log(`⚠ ${label} "${binding}": ${p}`, 'log-warn'));
+  return confirm(`${label} "${binding}" はビルドが失敗する可能性があります:\n\n・${problems.join('\n・')}\n\nこのまま反映しますか？`);
+}
+
 function applyKeyEdit() {
   // プレビュー入力欄の値を優先（直接入力も受け付ける）
   const raw = document.getElementById('key-modal-input').value;
@@ -1946,6 +1981,7 @@ function applyKeyEdit() {
     document.getElementById('key-modal-input').value = newBinding;
     log(`バインディングを正規化: "${raw.trim()}" → "${newBinding}"`, 'log-info');
   }
+  if (!confirmBindingSyntax(newBinding, 'バインディング')) return;
 
   const editKey = `${S.currentLayer}:${editingKeyIdx}`;
   const layer   = S.layers[S.currentLayer];
@@ -3520,7 +3556,11 @@ function reconstructWithCombos(raw, combos) {
         let replEnd = blockEnd + 1;
         const trailM = /^[ \t]*;/.exec(raw.slice(replEnd));
         if (trailM) replEnd += trailM[0].length;
-        return raw.slice(0, combosM.index) + newSec.trimEnd() + raw.slice(replEnd);
+        // AD-2: 行頭インデントも置換対象に含める（newSec 側の \t と二重になり保存毎に増えるのを防ぐ）
+        let replStart = combosM.index;
+        const lineStart = raw.lastIndexOf('\n', replStart - 1) + 1;
+        if (/^[ \t]*$/.test(raw.slice(lineStart, replStart))) replStart = lineStart;
+        return raw.slice(0, replStart) + newSec.trimEnd() + raw.slice(replEnd);
       }
     }
   }
@@ -3644,6 +3684,28 @@ document.getElementById('btn-combo-pick-done').addEventListener('click', () => e
 
 document.getElementById('combo-modal-ok').addEventListener('click', () => {
   if (!S.keymapRaw) return;
+  // AD-3: コンボ入力の検証（不正な DTS を push してビルド失敗するのを防ぐ）
+  const errors = [];
+  const names = new Set();
+  const keyCount = S.layoutKeys.length;
+  editingCombos.forEach((c, i) => {
+    const tag = `コンボ${i + 1}「${c.name}」`;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(c.name)) errors.push(`${tag}: 名前は英字/_で始まる英数字/_のみ使用できます`);
+    else if (names.has(c.name)) errors.push(`${tag}: 名前が重複しています`);
+    names.add(c.name);
+    const pos = c.positions.trim().split(/\s+/).filter(Boolean);
+    if (pos.length < 2 || !pos.every(p => /^\d+$/.test(p))) errors.push(`${tag}: キー位置は 2 個以上の数値で指定してください`);
+    else if (keyCount > 0 && pos.some(p => Number(p) >= keyCount)) errors.push(`${tag}: キー位置が範囲外です（0〜${keyCount - 1}）`);
+    if (!c.binding.trim()) errors.push(`${tag}: バインディングが空です`);
+  });
+  if (errors.length > 0) {
+    errors.forEach(e => log(`⚠ ${e}`, 'log-error'));
+    alert(`コンボに誤りがあります:\n\n・${errors.join('\n・')}`);
+    return;
+  }
+  for (const c of editingCombos) {
+    if (!confirmBindingSyntax(c.binding.trim(), `コンボ「${c.name}」`)) return;
+  }
   S.keymapRaw = reconstructWithCombos(S.keymapRaw, editingCombos);
   S.comboPending = true;
   document.getElementById('combo-modal').classList.add('hidden');
