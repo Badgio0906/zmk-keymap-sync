@@ -554,6 +554,9 @@
           <button class="beh-btn" data-beh="kp">&amp;kp</button>
           <button class="beh-btn" data-beh="lt">&amp;lt</button>
           <button class="beh-btn" data-beh="mt">&amp;mt</button>
+          <button class="beh-btn" data-beh="mo">&amp;mo</button>
+          <button class="beh-btn" data-beh="to">&amp;to</button>
+          <button class="beh-btn" data-beh="tog">&amp;tog</button>
           <button class="beh-btn" data-beh="none">&amp;none</button>
           <button class="beh-btn" data-beh="trans">&amp;trans</button>
           <button class="beh-btn" data-beh="mkp">&amp;mkp</button>
@@ -1512,7 +1515,7 @@ const KBD_LAYOUT = [
 
 // モーダル内部状態
 const M = { beh:null, kpKey:null, ltLayer:null, ltKey:null,
-            mtMod:null, mtKey:null, mkpBtn:null, btAction:null, btIdx:0 };
+            mtMod:null, mtKey:null, mkpBtn:null, btAction:null, btIdx:0, layerNo:null };
 
 let editingKeyIdx = null;
 let keyPickMode = false;   // T-1: TD/HT 単一キー選択モード
@@ -1576,6 +1579,14 @@ function renderBehParams() {
     h += `</div>`;
     h += chipLabel('タップキー', M.mtKey) + buildKbdHTML('mt', M.mtKey);
 
+  } else if (beh === 'mo' || beh === 'to' || beh === 'tog') {
+    h = chipLabel('レイヤー', M.layerNo !== null ? String(M.layerNo) : null);
+    h += `<div class="opt-btns">`;
+    S.layers.forEach((l, i) => {
+      h += `<button class="opt-btn${M.layerNo===i?' active':''}" data-layer-no="${i}">${i}: ${l.name}</button>`;
+    });
+    h += `</div>`;
+
   } else if (beh === 'mkp') {
     const BTNS = [{k:'MB1',l:'左クリック'},{k:'MB2',l:'右クリック'},
                   {k:'MB3',l:'中クリック'},{k:'MB4',l:'MB4'},{k:'MB5',l:'MB5'}];
@@ -1626,6 +1637,9 @@ function renderBehParams() {
   c.querySelectorAll('[data-lt-layer]').forEach(el => el.addEventListener('click', () => {
     M.ltLayer = parseInt(el.dataset.ltLayer); syncModalUI();
   }));
+  c.querySelectorAll('[data-layer-no]').forEach(el => el.addEventListener('click', () => {
+    M.layerNo = parseInt(el.dataset.layerNo); syncModalUI();
+  }));
   c.querySelectorAll('[data-mt-mod]').forEach(el => el.addEventListener('click', () => {
     M.mtMod = el.dataset.mtMod; syncModalUI();
   }));
@@ -1660,6 +1674,24 @@ const BEH_DESC = {
     title: '&mt — Mod Tap',
     body: 'タップ（短押し）→ 指定キーを送信\nホールド（長押し）→ 指定モディファイアを有効化\n\nホームロウモッドなどに使います。',
     example: '&mt LSHFT A\n→ タップで A\n→ ホールドで左 Shift\n\n&mt LCTRL SPACE\n→ タップでスペース\n→ ホールドで左 Ctrl',
+    rpc: true,
+  },
+  mo: {
+    title: '&mo — Momentary Layer',
+    body: '押している間だけ、指定レイヤーをアクティブ化します。\n離すと元のレイヤーに戻ります。',
+    example: '&mo 1\n→ 押している間レイヤー 1',
+    rpc: true,
+  },
+  to: {
+    title: '&to — To Layer',
+    body: '指定レイヤーに切り替え、他のレイヤー(デフォルト以外)を無効化します。\n元に戻すには、移動先のレイヤーに &to 0 などを置きます。',
+    example: '&to 0\n→ デフォルトレイヤーに戻る',
+    rpc: true,
+  },
+  tog: {
+    title: '&tog — Toggle Layer',
+    body: '押すたびに、指定レイヤーのオン/オフを切り替えます。\n戻すには、そのレイヤー内の同じ位置に &tog を置くと便利です。',
+    example: '&tog 6\n→ 押すとレイヤー 6 が有効、もう一度押すと無効',
     rpc: true,
   },
   none: {
@@ -1724,6 +1756,8 @@ function buildBindingFromModal() {
     case 'kp':         return M.kpKey ? `&kp ${M.kpKey}` : null;
     case 'lt':         return (M.ltLayer !== null && M.ltKey) ? `&lt ${M.ltLayer} ${M.ltKey}` : null;
     case 'mt':         return (M.mtMod && M.mtKey) ? `&mt ${M.mtMod} ${M.mtKey}` : null;
+    case 'mo': case 'to': case 'tog':
+                       return M.layerNo !== null ? `&${M.beh} ${M.layerNo}` : null;
     case 'none':       return '&none';
     case 'trans':      return '&trans';
     case 'bootloader': return '&bootloader';
@@ -1748,6 +1782,8 @@ function parseCurrentBinding(str) {
   if (ltM)  { M.beh = 'lt';  M.ltLayer = parseInt(ltM[1]); M.ltKey = ltM[2]; return; }
   const mtM = str.match(/^&mt\s+(\S+)\s+(\S+)$/);
   if (mtM)  { M.beh = 'mt';  M.mtMod = mtM[1]; M.mtKey = mtM[2]; return; }
+  const layM = str.match(/^&(mo|to|tog)\s+(\d+)$/);
+  if (layM) { M.beh = layM[1]; M.layerNo = parseInt(layM[2]); return; }
   const mkpM = str.match(/^&mkp\s+(\S+)$/);
   if (mkpM) { M.beh = 'mkp'; M.mkpBtn = mkpM[1]; return; }
   const btM = str.match(/^&bt\s+(\S+)(?:\s+(\d+))?$/);
@@ -1761,7 +1797,7 @@ document.getElementById('beh-selector').addEventListener('click', e => {
   const btn = e.target.closest('[data-beh]');
   if (!btn) return;
   M.beh = btn.dataset.beh;
-  M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = null;
+  M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = M.layerNo = null;
   M.btIdx = 0;
   document.querySelectorAll('.beh-btn').forEach(b => b.classList.toggle('active', b.dataset.beh === M.beh));
   syncModalUI();
@@ -1895,7 +1931,7 @@ function showCustomBehDesc(name) {
 function openKeyEdit(keyIdx, current) {
   editingKeyIdx = keyIdx;
   document.getElementById('key-modal-current').textContent = `(現在: ${current})`;
-  M.beh = null; M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = null; M.btIdx = 0;
+  M.beh = null; M.kpKey = M.ltLayer = M.ltKey = M.mtMod = M.mtKey = M.mkpBtn = M.btAction = M.layerNo = null; M.btIdx = 0;
   parseCurrentBinding(current);
   document.querySelectorAll('.beh-btn').forEach(b => b.classList.toggle('active', b.dataset.beh === M.beh));
   document.getElementById('beh-params-container').innerHTML = '';
@@ -1927,7 +1963,7 @@ function normalizeBinding(raw) {
   let s = raw.trim();
   if (!s) return null;
   if (!s.startsWith('&')) {
-    const BEHAVIORS = ['none','trans','bootloader','kp','lt','mt','mkp','bt'];
+    const BEHAVIORS = ['none','trans','bootloader','kp','lt','mt','mo','to','tog','mkp','bt'];
     if (BEHAVIORS.includes(s.split(/\s+/)[0])) s = '&' + s;
   }
   return s.startsWith('&') ? s : null;
@@ -2495,7 +2531,7 @@ function parseZmkKeycode(token) {
 }
 
 // バインディング文字列 → { beh, p1, p2 } に変換（RPC 送信用）
-// 対応: &kp &lt &mt &none &trans &bootloader &mkp &bt
+// 対応: &kp &lt &mt &mo &to &tog &none &trans &bootloader &mkp &bt
 function parseBindingForRpc(str) {
   str = str.trim().replace(/\s+/g, ' ');
 
@@ -2524,6 +2560,9 @@ function parseBindingForRpc(str) {
     if (p1 === null || p2 === null) return null;
     return { beh: 'mt', p1, p2 };
   }
+
+  const layM = str.match(/^&(mo|to|tog)\s+(\d+)$/);
+  if (layM) return { beh: layM[1], p1: parseInt(layM[2]), p2: 0 };
 
   const mkpM = str.match(/^&mkp\s+(\S+)$/);
   if (mkpM) {
@@ -3059,6 +3098,8 @@ function deviceBindingToString(behName, param1, param2, reverseKp) {
     case 'kp':         return `&kp ${kpLookup(param1)}`;
     case 'lt':         return `&lt ${param1} ${kpLookup(param2)}`;
     case 'mt':         return `&mt ${kpLookup(param1)} ${kpLookup(param2)}`;
+    case 'mo': case 'to': case 'tog':
+                       return `&${behName} ${param1}`;
     case 'none':       return '&none';
     case 'trans':      return '&trans';
     case 'bootloader': return '&bootloader';
